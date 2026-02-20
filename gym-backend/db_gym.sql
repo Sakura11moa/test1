@@ -637,6 +637,7 @@ CREATE TABLE `member_card_type`  (
   `card_type_id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL COMMENT '月卡/季卡/年卡',
   `days` int NOT NULL COMMENT '增加天数',
+  `card_months` int NOT NULL DEFAULT 1 COMMENT '分摊月数',
   `price` decimal(10, 2) NOT NULL COMMENT '价格',
   `status` tinyint NOT NULL DEFAULT 1 COMMENT '1启用 0禁用',
   PRIMARY KEY (`card_type_id`) USING BTREE
@@ -645,9 +646,9 @@ CREATE TABLE `member_card_type`  (
 -- ----------------------------
 -- Records of member_card_type
 -- ----------------------------
-INSERT INTO `member_card_type` VALUES (1, '月卡', 30, 300.00, 1);
-INSERT INTO `member_card_type` VALUES (2, '季卡', 90, 800.00, 1);
-INSERT INTO `member_card_type` VALUES (3, '年卡', 365, 2800.00, 1);
+INSERT INTO `member_card_type` VALUES (1, '月卡', 30, 1, 300.00, 1);
+INSERT INTO `member_card_type` VALUES (2, '季卡', 90, 3, 800.00, 1);
+INSERT INTO `member_card_type` VALUES (3, '年卡', 365, 12, 2800.00, 1);
 
 -- ----------------------------
 -- Table structure for receivable_transfer

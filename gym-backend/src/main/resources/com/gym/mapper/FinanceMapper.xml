@@ -9,6 +9,7 @@
         <id column="card_type_id" property="cardTypeId"/>
         <result column="name" property="name"/>
         <result column="days" property="days"/>
+        <result column="card_months" property="cardMonths"/>
         <result column="price" property="price"/>
         <result column="status" property="status"/>
     </resultMap>

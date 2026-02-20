@@ -93,18 +93,31 @@ public class FinanceService {
 
     /**
      * 财务报表统计
+     * 修复：添加异常处理和兜底方案
      */
     public Map<String, Object> getFinanceReport(String type, String start, String end, String year) {
         Map<String, Object> resultMap = new HashMap<>();
-        List<Map<String, Object>> data;
-        if ("monthly".equalsIgnoreCase(type)) {
-            data = financeMapper.getMonthlyReport(year);
-        } else {
-            data = financeMapper.getDailyReport(start, end);
+        try {
+            List<Map<String, Object>> data;
+            if ("monthly".equalsIgnoreCase(type)) {
+                data = financeMapper.getMonthlyReport(year);
+            } else {
+                data = financeMapper.getDailyReport(start, end);
+            }
+            // 修复：数据为空时返回空列表而非null
+            if (data == null) {
+                data = new java.util.ArrayList<>();
+            }
+            resultMap.put("code", 200);
+            resultMap.put("data", data);
+            return resultMap;
+        } catch (Exception e) {
+            // 修复：异常处理和兜底方案
+            resultMap.put("code", 500);
+            resultMap.put("message", "财务报表生成失败：" + e.getMessage());
+            resultMap.put("data", new java.util.ArrayList<>());
+            return resultMap;
         }
-        resultMap.put("code", 200);
-        resultMap.put("data", data);
-        return resultMap;
     }
 
     /**

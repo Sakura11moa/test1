@@ -1,0 +1,110 @@
+角色设定
+你现在是资深健身房 SaaS 系统后端开发工程师 + 业务架构师，熟悉 SpringBoot+Vue 技术栈、健身房行业核心业务规则（会员 / 充值 / 预约 / 财务）、权责发生制财务核算逻辑，能精准修复业务逻辑缺陷且保证代码可运行。
+核心任务
+全面修复我基于 SpringBoot+Vue 开发的健身房管理系统（包含gym-backend后端、gym-front前端）的所有业务逻辑缺陷，仅聚焦业务层面（不修改语法 / 命名 / 格式规范），严格按照下方缺陷修复要求完成全量修改。
+修复范围（必须全覆盖）
+1. 核心业务场景
+会员管理（注册 / 登录 / 续卡 / 信息修改）
+充值 / 消费 / 余额管理（储值、续卡扣款、课程扣费）
+场地 / 课程预约（预约、审核、签到、取消）
+财务核算（权责发生制、收入分摊、报表生成）
+定时任务（每月会籍费分摊、余额快照）
+2. 缺陷类型（按优先级）
+（1）高风险缺陷（必须优先修复）
+财务核算：会籍费分摊金额计算错误（年卡 1200 元分摊 120 元 / 月→修正为 100 元 / 月）
+数据一致性：充值操作无@Transactional事务注解，多表操作原子性缺失
+业务流程闭环：场地预约无时间冲突校验，同一场地同一时段可被重复预约
+财务核算：储值余额错误归入会籍费预收，需拆分储值预收和会籍费预收
+边界条件：扣款时未校验余额充足，导致储值余额为负
+（2）中风险缺陷
+业务流程闭环：退课仅删除预约记录，未恢复会员课程次数
+边界条件：会员卡月末续卡到期时间计算错误（如 2 月 28 日续卡 1 个月→3 月 28 日，需修正为 3 月 31 日）
+数据一致性：定时任务分摊收入时，仅更新finance_income表，未同步更新member_card表已分摊金额
+权限合规：普通会员可修改他人预约记录，无身份校验
+异常处理：定时任务无重试 + 告警机制，失败后无法感知
+（3）低风险缺陷
+边界条件：跨月课程收入确认按预约时间归属，需改为按上课时间归属
+异常处理：课程核销时无次数校验，抛出空指针，前端无友好提示
+权限合规：场地预约无单日时长上限（需限制单日累计≤2 小时）
+异常处理：财务报表生成无兜底方案，数据缺失直接失败
+具体修改要求
+代码修改规则：
+严格按照每个缺陷对应的 “修复建议代码片段” 修改，保留原有代码结构，仅修改缺陷部分；
+所有修改点添加注释标注：// 修复：XXX缺陷 - 原逻辑XXX，现逻辑XXX；
+新增的工具方法（如日期处理、时长计算）需完整实现，依赖的 Mapper/Service 方法（如countBySpaceAndTime）需补充 SQL / 接口定义；
+前端需同步适配后端返回的具体错误提示（如将 “请求失败” 改为 “余额不足，当前余额：XX”“该时段场地已被预约”）。
+技术实现要求：
+事务注解：使用@Transactional(rollbackFor = Exception.class)，确保多表操作原子性；
+重试机制：基于 Spring Retry 实现定时任务重试（maxAttempts=3，delay=5000ms），告警服务提供简化版（打印日志 + 控制台输出）；
+日期处理：使用Calendar或Hutool DateUtil处理月末日期，保证兼容性；
+财务逻辑：严格对齐权责发生制，拆分储值 / 会籍费预收，按上课时间确认课程收入。
+输出格式要求：
+按 “文件路径 → 修改内容 → 修改说明” 的结构，分文件输出完整修改后的代码；
+每个文件的修改内容为完整可直接替换的代码（而非仅片段）；
+每个修改点标注对应的缺陷类型（如「高风险 - 财务核算」「中风险 - 权限合规」）；
+最后生成「修改总结」，包含：已修复缺陷数量、缺陷类型分布、核心修改点清单。
+参考的缺陷修复代码片段（关键参考）
+1. 会籍费分摊金额修正
+java
+运行
+// 修复前
+BigDecimal monthlyAllocate = memberCard.getCardAmount().divide(BigDecimal.valueOf(10), 2, RoundingMode.HALF_UP);
+// 修复后
+BigDecimal monthlyAllocate = memberCard.getCardAmount().divide(BigDecimal.valueOf(memberCard.getCardMonths()), 2, RoundingMode.HALF_UP);
+2. 充值操作添加事务注解
+java
+运行
+@Transactional(rollbackFor = Exception.class)
+public Result recharge(RechargeDTO dto) {
+    balanceService.updateBalance(dto.getMemberId(), dto.getAmount());
+    rechargeRecordService.createRecord(dto);
+    financeFlowService.createFlow(dto);
+    return Result.success();
+}
+3. 场地预约冲突校验
+java
+运行
+// 新增冲突校验
+Integer conflictCount = bookingMapper.countBySpaceAndTime(dto.getSpaceId(), dto.getStartTime(), dto.getEndTime());
+if (conflictCount > 0) {
+    return Result.error("该时间段场地已被预约，请选择其他时段");
+}
+// Mapper XML补充
+/*
+<select id="countBySpaceAndTime" resultType="java.lang.Integer">
+    SELECT COUNT(*) FROM gym_booking 
+    WHERE space_id = #{spaceId} 
+    AND start_time < #{endTime} 
+    AND end_time > #{startTime}
+</select>
+*/
+4. 退课恢复课程次数
+java
+运行
+public Result cancelBooking(Long bookingId) {
+    Booking booking = bookingMapper.selectById(bookingId);
+    if (booking == null) return Result.error("预约记录不存在");
+    bookingMapper.deleteById(bookingId);
+    // 新增：恢复课程次数
+    memberCourseService.increaseCourseCount(booking.getMemberId(), booking.getCourseId(), 1);
+    return Result.success("退课成功，已恢复课程次数");
+}
+5. 月末续卡到期时间修正
+java
+运行
+public Date calculateExpireDate(Date currentExpireDate, int addMonths) {
+    Calendar cal = Calendar.getInstance();
+    cal.setTime(currentExpireDate);
+    int targetYear = cal.get(Calendar.YEAR);
+    int targetMonth = cal.get(Calendar.MONTH) + addMonths;
+    cal.set(Calendar.YEAR, targetYear);
+    cal.set(Calendar.MONTH, targetMonth);
+    cal.set(Calendar.DAY_OF_MONTH, cal.getActualMaximum(Calendar.DAY_OF_MONTH));
+    return cal.getTime();
+}
+最终输出要求
+输出所有修改后的完整代码文件（按gym-backend/gym-front分类）；
+每个文件头部标注「修改的缺陷类型 + 数量」；
+生成一份「修改验证清单」，说明每个缺陷修复后如何验证（如 “预约冲突校验：测试同一场地同一时段预约，应返回‘该时段已被预约’”）；
+确保所有修改后的代码可直接运行，无语法错误、无依赖缺失；
+前端修改聚焦于错误提示优化，无需重构页面，仅需将通用错误提示改为后端返回的具体提示。

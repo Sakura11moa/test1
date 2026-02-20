@@ -115,10 +115,11 @@ public class AccrualFinanceService {
     /**
      * 记录现金续卡的预收账款
      * 现金续卡：钱收到 → 预收账款-会籍费，按月分摊
+     * 修复：使用cardMonths参数作为分摊月数
      */
     @Transactional
     public Map<String, Object> recordCashRenewalDeferred(Integer memberNo, String renewalNo,
-                                                          BigDecimal amount, int days,
+                                                          BigDecimal amount, int months,
                                                           LocalDate newExpireTime, Integer operatorAdminId,
                                                           LocalDate startDate) {
         Map<String, Object> result = new HashMap<>();
@@ -132,12 +133,13 @@ public class AccrualFinanceService {
             return result;
         }
 
-        // 2. 计算分摊期数（月数）
-        int months = days / 30;
-        if (months < 1) months = 1;
+        // 2. 使用传入的months参数作为分摊期数（月数）
+        // 修复：原逻辑使用固定days/30计算，现使用cardMonths字段
+        int periods = months;
+        if (periods < 1) periods = 1;
 
         // 3. 计算每月分摊金额
-        BigDecimal monthlyAmount = amount.divide(BigDecimal.valueOf(months), 2, RoundingMode.HALF_UP);
+        BigDecimal monthlyAmount = amount.divide(BigDecimal.valueOf(periods), 2, RoundingMode.HALF_UP);
 
         // 4. 创建递延收益记录
         DeferredRevenue deferred = new DeferredRevenue();
@@ -149,7 +151,7 @@ public class AccrualFinanceService {
         deferred.setRecognizedAmount(BigDecimal.ZERO);
         deferred.setBizType(BIZ_TYPE_CARD); // 会籍费
         deferred.setSourceChannel("CASH"); // 现金续卡
-        deferred.setTotalPeriods(months);
+        deferred.setTotalPeriods(periods);
         deferred.setRecognizedPeriods(0);
         deferred.setStatus(1); // 进行中
         deferred.setStartDate(startDate);
@@ -168,24 +170,25 @@ public class AccrualFinanceService {
                 "CASH",
                 null,
                 operatorAdminId,
-                "预收账款-会籍费(" + months + "个月,每月" + monthlyAmount + ")"
+                "预收账款-会籍费(" + periods + "个月,每月" + monthlyAmount + ")"
         );
 
         result.put("code", 200);
         result.put("message", "现金续卡预收账款记录成功");
         result.put("deferredId", deferred.getId());
         result.put("monthlyAmount", monthlyAmount);
-        result.put("totalMonths", months);
+        result.put("totalMonths", periods);
         return result;
     }
 
     /**
      * 记录余额续卡的预收账款内部划转
      * 余额续卡：储值余额 → 会籍费，不产生新收入，只是内部划转
+     * 修复：使用months参数作为分摊月数
      */
     @Transactional
     public Map<String, Object> recordBalanceRenewalTransfer(Integer memberNo, String renewalNo,
-                                                             BigDecimal amount, int days,
+                                                             BigDecimal amount, int months,
                                                              String fromRechargeNo,
                                                              LocalDate newExpireTime,
                                                              LocalDate startDate) {
@@ -200,11 +203,12 @@ public class AccrualFinanceService {
             return result;
         }
 
-        // 2. 计算分摊期数
-        int months = days / 30;
-        if (months < 1) months = 1;
+        // 2. 使用传入的months参数作为分摊期数
+        // 修复：原逻辑使用days/30计算，现使用cardMonths字段
+        int periods = months;
+        if (periods < 1) periods = 1;
 
-        BigDecimal monthlyAmount = amount.divide(BigDecimal.valueOf(months), 2, RoundingMode.HALF_UP);
+        BigDecimal monthlyAmount = amount.divide(BigDecimal.valueOf(periods), 2, RoundingMode.HALF_UP);
 
         // 3. 创建递延收益记录
         DeferredRevenue deferred = new DeferredRevenue();
@@ -216,7 +220,7 @@ public class AccrualFinanceService {
         deferred.setRecognizedAmount(BigDecimal.ZERO);
         deferred.setBizType(BIZ_TYPE_CARD);
         deferred.setSourceChannel("BALANCE"); // 余额续卡
-        deferred.setTotalPeriods(months);
+        deferred.setTotalPeriods(periods);
         deferred.setRecognizedPeriods(0);
         deferred.setStatus(1);
         deferred.setStartDate(startDate);

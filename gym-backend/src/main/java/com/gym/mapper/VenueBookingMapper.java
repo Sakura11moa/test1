@@ -100,6 +100,12 @@ public interface VenueBookingMapper {
      * 统计指定会员在指定日期和时段的有效预约数量
      */
     int countMemberActiveBookingsBySlot(@Param("memberNo") int memberNo, @Param("date") String date, @Param("timeSlot") String timeSlot);
+
+    /**
+     * 统计指定会员在指定日期的已预约总时长（分钟）
+     * 修复：场地预约单日时长上限校验
+     */
+    Integer getMemberDayTotalMinutes(@Param("memberNo") int memberNo, @Param("date") String date);
 }
 
 

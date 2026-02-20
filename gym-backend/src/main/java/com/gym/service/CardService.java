@@ -36,7 +36,32 @@ public class CardService {
     @Resource
     private RechargeMapper rechargeMapper;
 
-    @Transactional
+    /**
+     * 计算续卡后的到期时间（修复：月末续卡到期时间计算错误）
+     * 例如：2月28日续卡1个月 → 3月31日（而非3月28日）
+     * 使用Calendar处理月末日期边界情况
+     */
+    private LocalDateTime calculateExpireDate(LocalDateTime currentExpireDate, int addMonths) {
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.setTime(java.sql.Timestamp.valueOf(currentExpireDate));
+
+        int targetYear = cal.get(java.util.Calendar.YEAR);
+        int targetMonth = cal.get(java.util.Calendar.MONTH) + addMonths;
+
+        cal.set(java.util.Calendar.YEAR, targetYear);
+        cal.set(java.util.Calendar.MONTH, targetMonth);
+        // 设置为该月的最后一天
+        cal.set(java.util.Calendar.DAY_OF_MONTH, cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH));
+
+        // 设置时间为当天的最后一秒 (23:59:59)
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 23);
+        cal.set(java.util.Calendar.MINUTE, 59);
+        cal.set(java.util.Calendar.SECOND, 59);
+
+        return cal.getTime().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();
+    }
+
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> renewMemberCard(Integer memberNo, Integer cardTypeId, String payChannel, Integer operatorAdminId, String remark) {
         Map<String, Object> resultMap = new HashMap<>();
 
@@ -62,11 +87,16 @@ public class CardService {
 
         int days = cardType.getDays();
         BigDecimal amount = cardType.getPrice();
+        // 修复：使用cardMonths字段作为分摊月数，而非固定的days/30
+        int cardMonths = cardType.getCardMonths() != null ? cardType.getCardMonths() : (days / 30);
+        if (cardMonths < 1) cardMonths = 1;
 
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime oldExpire = member.getExpireTime();
         LocalDateTime base = (oldExpire == null || oldExpire.isBefore(now)) ? now : oldExpire;
-        LocalDateTime newExpire = base.plusDays(days);
+
+        // 修复：使用calculateExpireDate方法正确计算月末到期时间
+        LocalDateTime newExpire = calculateExpireDate(base, cardMonths);
         
         // 计算生效日期：用于按生效日期统计本月新增负债
         // 如果原卡已过期，生效日期为今天；否则为原卡到期日的下一天
@@ -151,22 +181,24 @@ public class CardService {
             // 余额续卡：记录预收账款内部划转
             // 查找会员最近的充值记录作为来源
             String fromRechargeNo = getLatestRechargeNo(memberNo);
+            // 修复：传递cardMonths作为分摊月数
             accrualFinanceService.recordBalanceRenewalTransfer(
                     memberNo,
                     renewalNoStr,
                     amount,
-                    days,
+                    cardMonths, // 使用分摊月数而非天数
                     fromRechargeNo,
                     newExpireDate,
                     effectiveDate  // 作为 startDate（生效日期）
             );
         } else {
             // 现金续卡：记录预收账款（会籍费）
+            // 修复：传递cardMonths作为分摊月数
             accrualFinanceService.recordCashRenewalDeferred(
                     memberNo,
                     renewalNoStr,
                     amount,
-                    days,
+                    cardMonths, // 使用分摊月数而非天数
                     newExpireDate,
                     operatorAdminId,
                     effectiveDate  // 作为 startDate（生效日期）

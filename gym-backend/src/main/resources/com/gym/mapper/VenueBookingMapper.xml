@@ -179,6 +179,15 @@
         ORDER BY vb.booking_date DESC, vb.booking_time DESC
     </select>
 
+    <!-- 修复：场地预约单日时长上限校验 - 统计指定会员在指定日期的已预约总时长 -->
+    <select id="getMemberDayTotalMinutes" resultType="java.lang.Integer">
+        SELECT COALESCE(SUM(duration_minutes), 0)
+        FROM venue_booking
+        WHERE member_no = #{memberNo}
+          AND booking_date = #{date}
+          AND status IN ('0', '1')
+    </select>
+
 </mapper>
 
 

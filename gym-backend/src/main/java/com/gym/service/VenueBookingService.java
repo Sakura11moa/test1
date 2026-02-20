@@ -60,6 +60,8 @@ public class VenueBookingService {
     private static final int TIME_GRANULARITY_MINUTES = 30; // 统一修改为30分钟起点粒度
     private static final LocalTime DEFAULT_OPEN = LocalTime.of(6, 0);
     private static final LocalTime DEFAULT_CLOSE = LocalTime.of(22, 0);
+    // 修复：单日预约时长上限（2小时 = 120分钟）
+    private static final int MAX_DAY_TOTAL_MINUTES = 120;
 
     public List<String> getAvailableStartTimes(String dateStr, Integer venueNo) {
         if (dateStr == null || venueNo == null) {
@@ -249,6 +251,14 @@ public class VenueBookingService {
         if (memberBookings != null && !memberBookings.isEmpty()) {
             resultMap.put("code", 400);
             resultMap.put("message", "预约失败，您在该时段已有其他预约行程");
+            return resultMap;
+        }
+
+        // 修复：单日预约时长上限校验（限制单日累计≤2小时）
+        Integer existingMinutes = venueBookingMapper.getMemberDayTotalMinutes(memberNo, dateStr);
+        if (existingMinutes != null && existingMinutes + DURATION_MINUTES > MAX_DAY_TOTAL_MINUTES) {
+            resultMap.put("code", 400);
+            resultMap.put("message", "预约失败，您当日已预约" + existingMinutes + "分钟，单日累计上限为" + MAX_DAY_TOTAL_MINUTES + "分钟");
             return resultMap;
         }
 
