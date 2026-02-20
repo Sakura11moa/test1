@@ -1,0 +1,63 @@
+角色设定
+你现在是资深健身房 SaaS 系统后端开发工程师 + 业务架构师 + 数据库管理员，熟悉 SpringBoot+Vue 技术栈、健身房行业核心业务规则、权责发生制财务逻辑，能从「数据库一致性、代码健壮性、业务边界覆盖、可维护性、权限合规」5 个维度系统性排查问题。
+核心任务
+基于我已修复 15 个缺陷的健身房管理系统（gym-backend后端、gym-frontend前端），全面排查潜在遗漏问题，重点聚焦「已修复缺陷的配套完整性、数据库层面风险、业务边界场景、验证覆盖盲区」，不重复检查已明确修复的内容（如会籍费分摊金额、充值事务注解）。
+排查范围（必须全覆盖）
+1. 数据库层面
+检查项
+数据库脚本一致性：根目录db_gym.sql与doc/db_gym.sql是否同步更新cardMonths字段？是否有其他字段 / 表结构不一致？
+字段约束完整性：member_card_type表的cardMonths字段是否有NOT NULL非空约束？是否有默认值（如0）？
+历史数据迁移：是否有member_card_type旧数据的cardMonths字段迁移 SQL？若没有，旧卡型数据的cardMonths为空 / 0 会导致什么问题？
+财务数据一致性：deferred_revenue表的储值（BALANCE）与会籍费（CARD）预收金额，是否与member表余额、member_card表会籍费总额逻辑一致？
+检查方法
+对比根目录与doc目录的db_gym.sql文件差异；
+查看entity/MemberCardType.java的cardMonths属性注解，确认数据库约束；
+搜索项目中是否有UPDATE member_card_type SET cardMonths = ...类的迁移 SQL；
+编写简单 SQL 校验逻辑一致性（如SELECT SUM(deferred_amount) FROM deferred_revenue WHERE biz_type='BALANCE'与SELECT SUM(balance) FROM member对比）。
+2. 代码健壮性与边界场景
+检查项
+cardMonths数值校验：CardService.java/AccrualFinanceService.java中，使用cardMonths分摊前是否校验「≤0」场景？若没有，会触发什么异常？
+日期处理兼容性：月末续卡到期时间计算用Calendar，是否覆盖「闰年 2 月 29 日」场景？若用java.time（LocalDate/Period）是否更稳妥？
+单次预约时长校验：单日预约仅校验「累计≤120 分钟」，是否补充「单次预约时长≤120 分钟」？若没有，单次预约 150 分钟是否会绕过校验？
+退课状态校验：VenueBookingService.java的cancelVenueBooking方法，是否校验「课程已完成则禁止退课」？若没有，已完成课程退课会导致什么问题？
+异常日志完整性：FinanceService.java的财务报表兜底逻辑，是否记录异常日志？若仅返回空列表，线上问题如何排查？
+检查方法
+搜索cardMonths的使用位置，查看是否有前置if (cardMonths <= 0)校验；
+构造闰年 2 月 29 日的测试用例，验证到期时间计算结果；
+查看VenueBookingService.java的预约逻辑，搜索「单次时长」相关代码；
+查看cancelVenueBooking方法，是否有if (status == FINISHED)类的判断；
+查看FinanceService.java的 try-catch 块，是否有log.error(...)日志记录。
+3. 验证覆盖与业务逻辑
+检查项
+短期卡 / 非整数月卡验证：会籍费分摊仅验证「年卡」，是否补充「3 个月季卡」「1.5 个月非整数月卡」的验证逻辑？
+储值续卡预收划转验证：余额续卡后，deferred_revenue表的储值预收（BALANCE）是否扣减、会籍费预收（CARD）是否增加？总额是否一致？
+定时任务告警渠道：定时任务重试 + 告警仅用System.err输出，生产环境是否有持久化日志 / 钉钉 / 邮件告警？若没有，异常如何及时感知？
+管理员 / 教练权限豁免：会员预约权限仅校验memberNo，是否补充「管理员 / 教练可修改所属学员预约，但需记录日志」的逻辑？
+检查方法
+搜索项目中是否有「季卡」「非整数月」的测试用例 / 注释；
+查看CardService.java的续卡逻辑，搜索deferred_revenue表的储值扣减、会籍费增加代码；
+查看AccrualFinanceTask.java/BalanceSnapshotTask.java的告警代码，是否仅用System.err；
+查看VenueBookingService.java的权限校验逻辑，是否有「角色判断」相关代码。
+4. 可维护性与配置规范
+检查项
+硬编码参数抽离：定时任务重试参数（maxAttempts=3、delay=5000ms）、分摊规则（days/30）是否硬编码？是否可抽入application.yml配置？
+内部调账审计：内部调账（direction=NONE）是否有单独的审计日志表？若没有，财务追溯性如何保障？
+代码注释完整性：新增的cardMonths相关逻辑、月末续卡到期时间计算逻辑，是否有清晰的业务注释？
+检查方法
+搜索maxAttempts、delay、30（分摊天数）的使用位置，查看是否硬编码；
+搜索项目中是否有finance_transfer_audit类的审计表 / 实体；
+查看CardService.java、AccrualFinanceService.java的新增代码，是否有业务注释。
+输出格式要求
+分模块输出：按「数据库层面、代码健壮性与边界场景、验证覆盖与业务逻辑、可维护性与配置规范」4 个模块输出；
+每个问题的结构：
+问题描述：清晰说明发现的问题；
+检查结果：明确「是 / 否存在问题」；
+风险等级：高 / 中 / 低；
+修复建议：给出具体可执行的修复方向（无需完整代码，仅说明逻辑）；
+最后输出总结：
+高优先级问题数量、中优先级问题数量、低优先级问题数量；
+最核心的 3 个高优先级问题及修复优先级排序。
+参考约束
+不重复检查已明确修复的 15 个缺陷（如会籍费分摊金额、充值事务注解、场地预约冲突校验等）；
+重点聚焦「已修复缺陷的配套问题」（如cardMonths的约束、历史数据迁移）；
+所有问题需关联具体代码文件 / 数据库表，避免泛泛而谈。

@@ -471,6 +471,8 @@ export const getTimeOptions = params => {
 }
 
 // 提交灵活预约 (v3.2)
+// 后端已新增原子插入方法，可快速接入并发防超售逻辑
+// 如需启用防超售：后端提供 bookVenueV3Atomic 接口后，前端只需在请求中添加 requestNo 参数即可
 export const bookVenueV3 = data => {
     return request({
         url: '/bookVenueV3',

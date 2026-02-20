@@ -25,4 +25,7 @@ public class Recharge {
 
     private Integer memberNo;
 
+    // 修复：接口幂等性新增字段
+    private String requestNo;
+
 }

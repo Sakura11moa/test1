@@ -106,6 +106,18 @@ public interface VenueBookingMapper {
      * 修复：场地预约单日时长上限校验
      */
     Integer getMemberDayTotalMinutes(@Param("memberNo") int memberNo, @Param("date") String date);
+
+    // 修复：接口幂等性查询方法
+    VenueBooking selectByRequestNo(@Param("requestNo") String requestNo);
+
+    // 修复：并发预约超售问题，新增原子插入方法
+    int insertIfNotConflict(
+        @Param("venueNo") Integer venueNo,
+        @Param("memberNo") Integer memberNo,
+        @Param("startTime") java.time.LocalDateTime startTime,
+        @Param("endTime") java.time.LocalDateTime endTime,
+        @Param("requestNo") String requestNo
+    );
 }
 
 

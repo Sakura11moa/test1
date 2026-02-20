@@ -113,6 +113,15 @@ import {
   getTotalMoney, updateMemberChange
 } from "@/api/allApi";
 
+// 生成 UUID 函数
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 export default {
   name: "OnlinePay",
   data() {
@@ -148,10 +157,13 @@ export default {
     pay(){
 
       let _this = this
-      if(_this.price > 0){
+      if(_this.price > 0) {
+        // 生成唯一请求号，保证幂等性
+        const requestNo = generateUUID()
         addRechargeByMemberNo({
           memberNo: _this.admin.memberNo,
-          rechargeMoney:this.price,
+          rechargeMoney: this.price,
+          requestNo: requestNo
         }).then(res=>{
           if(res.data.code===200){
             alert(res.data.message)

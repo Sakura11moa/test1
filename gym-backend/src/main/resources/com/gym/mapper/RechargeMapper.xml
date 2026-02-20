@@ -11,6 +11,8 @@
         <result column="rechargeMethod" property="rechargeMethod" jdbcType="VARCHAR"></result>
         <result column="rechargeStatus" property="rechargeStatus" jdbcType="INTEGER"></result>
         <result column="memberNo" property="memberNo" jdbcType="INTEGER"></result>
+        <!-- 修复：接口幂等性新增字段映射 -->
+        <result column="request_no" property="requestNo" jdbcType="VARCHAR"></result>
     </resultMap>
 
 
@@ -28,6 +30,11 @@
         insert into recharge(rechargeDate ,rechargeMethod,rechargeMoney,rechargeStatus,memberNo)
         VALUES (#{rechargeDate},#{rechargeMethod},#{rechargeMoney},#{rechargeStatus},#{memberNo})
     </insert>
+
+    <!-- 修复：接口幂等性查询方法 -->
+    <select id="selectByRequestNo" resultMap="RechargeResultMap" resultType="com.gym.entity.Recharge">
+        SELECT * FROM recharge WHERE request_no = #{requestNo}
+    </select>
 
     <!--添加会员-->
     <insert id="addMember">

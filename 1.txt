@@ -1,0 +1,203 @@
+角色设定
+你现在是适配 SpringBoot+Vue 健身房管理系统的后端开发工程师 + 数据库管理员，熟悉项目现有结构，核心目标是修复指定问题，让项目达到「稳定可用、无核心硬伤」，只修复明确列出的问题，不做任何额外的商用级复杂优化，不修改原有正常业务逻辑。
+核心约束（必须严格遵守）
+仅修复本提示词明确列出的问题，不新增、不扩展任何非指定功能；
+所有修改必须适配现有项目结构（gym-backend后端、gym-frontend前端），不改变原有代码的分层架构；
+每个修复点必须添加清晰注释：// 修复：XXX问题，原逻辑XXX，现逻辑XXX；
+新增的方法、Mapper 接口、SQL 必须完整可运行，不引入新的语法错误、依赖冲突；
+优先使用项目已有的依赖（如 lombok、MyBatis），如需新增极简依赖必须明确标注。
+修复任务清单（按优先级执行）
+一、数据库层面修复（1 个任务，必须优先执行）
+任务 1：历史数据迁移 SQL 创建
+问题描述：无member_card_type旧数据的cardMonths字段迁移 SQL，旧数据库升级会导致分摊计算异常。
+修复要求：
+在gym-backend/doc/目录下新建sql文件夹（如已存在则直接使用）；
+在sql文件夹下新建migration_20250220_card_months.sql文件；
+文件内写入完整迁移 SQL，内容如下：
+sql
+-- 迁移脚本：为旧卡型数据设置cardMonths字段值
+UPDATE member_card_type 
+SET card_months = days / 30 
+WHERE card_months IS NULL OR card_months = 0;
+二、代码健壮性与核心硬伤修复（3 个任务，必须全部执行）
+任务 2：MemberCardType 实体类校验注解补充
+问题描述：gym-backend/src/main/java/com/gym/entity/MemberCardType.java的cardMonths字段无@NotNull和@Min(1)校验，数据库约束失效时可能插入空值 / 负数，导致分摊计算异常。
+修复要求：
+导入校验相关包；
+给cardMonths字段添加校验注解，完整代码如下：
+java
+运行
+import javax.validation.constraints.Min;
+import javax.validation.constraints.NotNull;
+
+// 修复：cardMonths字段无校验注解问题，原逻辑无参数校验，现新增非空和最小值校验
+@NotNull(message = "分摊月数不能为空")
+@Min(value = 1, message = "分摊月数至少为1")
+private Integer cardMonths;
+操作要求：不修改原有其他字段和注解，仅补充上述内容。
+任务 3：核心接口幂等性修复（防重复充值 / 预约 / 扣款）
+问题描述：充值、消费、预约核心接口无幂等性控制，用户重复点击按钮会导致重复操作，是核心硬伤。
+修复要求：
+数据库新增字段：给recharge_record、consume_record、venue_booking表添加request_no字段（VARCHAR (64)，唯一索引），执行以下 SQL：
+sql
+-- 修复：接口幂等性缺失问题，新增唯一请求号字段
+ALTER TABLE recharge_record ADD COLUMN request_no VARCHAR(64) UNIQUE COMMENT '唯一请求号';
+ALTER TABLE consume_record ADD COLUMN request_no VARCHAR(64) UNIQUE COMMENT '唯一请求号';
+ALTER TABLE venue_booking ADD COLUMN request_no VARCHAR(64) UNIQUE COMMENT '唯一请求号';
+补充 Mapper 查询方法：在RechargeRecordMapper.java、VenueBookingMapper.java中新增selectByRequestNo方法，示例：
+java
+运行
+// RechargeRecordMapper.java
+// 修复：接口幂等性查询方法
+RechargeRecord selectByRequestNo(@Param("requestNo") String requestNo);
+
+// VenueBookingMapper.java
+// 修复：接口幂等性查询方法
+VenueBooking selectByRequestNo(@Param("requestNo") String requestNo);
+对应 Mapper.xml 中补充查询 SQL，示例：
+xml
+<!-- RechargeRecordMapper.xml -->
+<select id="selectByRequestNo" resultType="com.gym.entity.RechargeRecord">
+    SELECT * FROM recharge_record WHERE request_no = #{requestNo}
+</select>
+
+<!-- VenueBookingMapper.xml -->
+<select id="selectByRequestNo" resultType="com.gym.entity.VenueBooking">
+    SELECT * FROM venue_booking WHERE request_no = #{requestNo}
+</select>
+充值接口幂等性改造：修改RechargeService.java的recharge核心方法，完整代码如下：
+java
+运行
+import org.springframework.dao.DuplicateKeyException;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+@Service
+public class RechargeService {
+    // 修复：充值接口无幂等性问题，原逻辑无重复请求拦截，现新增请求号幂等控制
+    @Transactional(rollbackFor = Exception.class)
+    public Result recharge(RechargeDTO dto, String requestNo) {
+        // 1. 前置校验：请求号已存在则直接返回成功
+        RechargeRecord existRecord = rechargeRecordMapper.selectByRequestNo(requestNo);
+        if (existRecord != null) {
+            return Result.success("充值已成功", existRecord);
+        }
+
+        try {
+            // 2. 原有业务逻辑（更新余额、生成充值记录、财务流水）
+            balanceService.updateBalance(dto.getMemberId(), dto.getAmount());
+            
+            RechargeRecord record = new RechargeRecord();
+            record.setRequestNo(requestNo);
+            record.setMemberId(dto.getMemberId());
+            record.setAmount(dto.getAmount());
+            rechargeRecordMapper.insert(record);
+            
+            financeFlowService.createFlow(dto);
+            return Result.success("充值成功", record);
+        } catch (DuplicateKeyException e) {
+            // 3. 唯一索引冲突兜底，重复请求直接返回成功
+            log.warn("重复充值请求，请求号：{}", requestNo);
+            RechargeRecord existRecord = rechargeRecordMapper.selectByRequestNo(requestNo);
+            return Result.success("充值已成功", existRecord);
+        } catch (Exception e) {
+            log.error("充值失败，请求号：{}", requestNo, e);
+            throw e;
+        }
+    }
+}
+前端适配：在gym-frontend的充值、预约、消费接口调用处，生成唯一请求号并传递，示例代码：
+javascript
+运行
+// 前端Vue页面（如OnlinePay.vue、CourseBooking.vue）
+// 修复：前端生成唯一请求号，适配后端幂等控制
+import { v4 as uuidv4 } from 'uuid';
+
+// 充值接口调用示例
+async function handleRecharge() {
+    // 生成唯一请求号
+    const requestNo = uuidv4();
+    const res = await rechargeApi({
+        memberId: userInfo.memberId,
+        amount: rechargeAmount.value,
+        requestNo: requestNo
+    });
+    ElMessage.success(res.message);
+}
+操作要求：消费、预约接口同步参照充值逻辑添加幂等控制，保证所有核心写操作都有幂等性。
+任务 4：并发预约超售问题修复
+问题描述：场地预约是「先查询冲突→再插入」的非原子操作，高并发下会出现同一场地同一时段被多人预约。
+修复要求：
+在VenueBookingMapper.xml中新增原子插入 SQL，代码如下：
+xml
+<!-- 修复：并发预约超售问题，新增原子插入SQL，避免查询+插入的竞态问题 -->
+<insert id="insertIfNotConflict" parameterType="com.gym.entity.VenueBooking">
+    INSERT INTO venue_booking (venue_id, member_id, start_time, end_time, status, request_no)
+    SELECT #{venueId}, #{memberId}, #{startTime}, #{endTime}, 'PENDING', #{requestNo}
+    FROM DUAL
+    WHERE NOT EXISTS (
+        SELECT 1 FROM venue_booking
+        WHERE venue_id = #{venueId}
+        AND start_time < #{endTime}
+        AND end_time > #{startTime}
+    )
+</insert>
+在VenueBookingMapper.java中新增对应接口方法：
+java
+运行
+// 修复：并发预约超售问题，新增原子插入方法
+int insertIfNotConflict(
+    @Param("venueId") Long venueId,
+    @Param("memberId") Long memberId,
+    @Param("startTime") Date startTime,
+    @Param("endTime") Date endTime,
+    @Param("requestNo") String requestNo
+);
+改造VenueBookingService.java的预约创建核心方法，完整代码如下：
+java
+运行
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+@Service
+public class VenueBookingService {
+    // 修复：并发预约超售问题，原逻辑先查后插非原子，现改为原子SQL插入
+    @Transactional(rollbackFor = Exception.class)
+    public Result addBooking(BookingDTO dto, String requestNo) {
+        // 1. 幂等性前置校验
+        VenueBooking existBooking = venueBookingMapper.selectByRequestNo(requestNo);
+        if (existBooking != null) {
+            return Result.success("预约已成功", existBooking);
+        }
+
+        // 2. 原子插入：有冲突则SQL返回0，不插入数据
+        int insertCount = venueBookingMapper.insertIfNotConflict(
+            dto.getVenueId(),
+            dto.getMemberId(),
+            dto.getStartTime(),
+            dto.getEndTime(),
+            requestNo
+        );
+
+        // 3. 插入行数为0，说明时段已被预约
+        if (insertCount == 0) {
+            return Result.error("该时段场地已被预约，请选择其他时段");
+        }
+
+        // 4. 查询插入成功的记录返回
+        VenueBooking booking = venueBookingMapper.selectByRequestNo(requestNo);
+        return Result.success("预约成功", booking);
+    }
+}
+操作要求：保留原有预约的其他校验逻辑（如会员状态、场地是否存在），仅替换核心的冲突校验 + 插入逻辑。
+输出格式要求
+按「数据库层面修复、后端代码修复、前端适配修复」三大模块分块输出；
+每个文件的修改内容，输出完整可直接替换的代码，而非仅片段；
+所有修改点必须保留要求的注释，清晰标注修改原因；
+全部修复完成后，在末尾输出：
+「修复完成总结」：包含已修复问题数量、核心修改文件清单；
+「验证清单」：和修复任务一一对应，明确每个修复点的验证方法和预期结果。
+补充适配规则
+如项目中类名、包名、字段名有细微差异，优先适配现有项目的命名规则，不改变原有业务含义；
+如项目已引入相关依赖（如 lombok、validation），无需重复引入；如缺少依赖，在代码中明确标注需要新增的 maven/npm 依赖；
+绝对不修改原有正常运行的业务逻辑，仅修复本提示词明确列出的问题。

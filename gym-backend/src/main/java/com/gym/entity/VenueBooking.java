@@ -56,6 +56,9 @@ public class VenueBooking {
     private LocalDateTime timeoutAt;
 
     private Integer version;
+
+    // 修复：接口幂等性新增字段
+    private String requestNo;
 }
 
 

@@ -269,6 +269,15 @@ import {
   getPurchasedCourses,
 } from "@/api/allApi";
 
+// 生成 UUID 函数
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 export default {
   name: "CourseBooking",
   data() {
@@ -470,12 +479,15 @@ export default {
 
       this.bookingLoading = true;
       try {
+        // 生成唯一请求号，保证幂等性，支持后端防超售原子插入
+        const requestNo = generateUUID();
         const res = await bookVenueV3({
           memberNo: this.admin.memberNo,
           courseNo: this.selectedCourseNo,
           venueNo: this.selectedVenueNo,
           bookingDate: this.selectedDate,
           startTime: this.selectedStartTime,
+          requestNo: requestNo  // 传入requestNo，后端原子插入方法可据此快速接入防超售
         });
 
         if (res.data && res.data.code === 200) {

@@ -3,6 +3,7 @@ package com.gym.controller;
 import com.gym.entity.Recharge;
 import com.gym.service.RechargeService;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
@@ -27,9 +28,14 @@ public class RechargeController {
         return rechargeService.getRechargeByMemberNo(memberNo);
     }
 
+    /**
+     * 修复：接口幂等性支持，前端传入requestNo实现幂等控制
+     */
     @RequestMapping(path = "/addRechargeByMemberNo")
-    public Map<String,Object> addRechargeByMemberNo(Recharge recharge) {
-        return rechargeService.addRechargeByMemberNo(recharge);
+    public Map<String,Object> addRechargeByMemberNo(Recharge recharge, 
+            @RequestParam(required = false) String requestNo) {
+        // 修复：传递requestNo参数，支持前端幂等控制
+        return rechargeService.addRechargeByMemberNo(recharge, requestNo);
     }
 
 

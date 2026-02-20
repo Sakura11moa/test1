@@ -24,6 +24,8 @@
         <result column="reject_reason" property="rejectReason" jdbcType="VARCHAR"></result>
         <result column="timeout_at" property="timeoutAt" jdbcType="TIMESTAMP"></result>
         <result column="version" property="version" jdbcType="INTEGER"></result>
+        <!-- 修复：接口幂等性新增字段映射 -->
+        <result column="request_no" property="requestNo" jdbcType="VARCHAR"></result>
     </resultMap>
 
     <resultMap id="MyVenueBookingResultMap" type="com.gym.entity.MyVenueBooking">
@@ -187,6 +189,28 @@
           AND booking_date = #{date}
           AND status IN ('0', '1')
     </select>
+
+    <!-- 修复：接口幂等性查询方法 -->
+    <select id="selectByRequestNo" resultMap="VenueBookingResultMap">
+        SELECT * FROM venue_booking WHERE request_no = #{requestNo}
+    </select>
+
+    <!-- 修复：并发预约超售问题，新增原子插入SQL，避免查询+插入的竞态问题 -->
+    <insert id="insertIfNotConflict" parameterType="com.gym.entity.VenueBooking">
+        INSERT INTO venue_booking (venue_no, member_no, start_time, end_time, status, request_no, duration_minutes, time_slot, booking_date)
+        SELECT #{venueNo}, #{memberNo}, #{startTime}, #{endTime}, '0', #{requestNo}, 
+               TIMESTAMPDIFF(MINUTE, #{startTime}, #{endTime}),
+               CONCAT(DATE_FORMAT(#{startTime}, '%H:%i'), '-', DATE_FORMAT(#{endTime}, '%H:%i')),
+               DATE(#{startTime})
+        FROM DUAL
+        WHERE NOT EXISTS (
+            SELECT 1 FROM venue_booking
+            WHERE venue_no = #{venueNo}
+            AND status IN ('0', '1')
+            AND start_time &lt; #{endTime}
+            AND end_time > #{startTime}
+        )
+    </insert>
 
 </mapper>
 

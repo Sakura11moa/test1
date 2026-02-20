@@ -2,6 +2,7 @@ package com.gym.mapper;
 
 import com.gym.entity.Recharge;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -19,4 +20,7 @@ public interface RechargeMapper {
     List<Recharge> getRechargeByMemberNo(int memberNo);
 
     int addRechargeByMemberNo(Recharge recharge);
+
+    // 修复：接口幂等性查询方法
+    Recharge selectByRequestNo(@Param("requestNo") String requestNo);
 }
