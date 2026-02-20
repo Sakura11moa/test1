@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.BalanceSnapshotMapper">
+
+    <resultMap id="BalanceSnapshotResultMap" type="com.gym.entity.BalanceSnapshot">
+        <id column="id" property="id"/>
+        <result column="snapshot_date" property="snapshotDate"/>
+        <result column="balance_amount" property="balanceAmount"/>
+        <result column="card_deferred_amount" property="cardDeferredAmount"/>
+        <result column="course_deferred_amount" property="courseDeferredAmount"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.gym.entity.BalanceSnapshot" useGeneratedKeys="true" keyProperty="id">
+        insert into balance_snapshot(
+            snapshot_date, balance_amount, card_deferred_amount, course_deferred_amount
+        ) values (
+            #{snapshotDate}, #{balanceAmount}, #{cardDeferredAmount}, #{courseDeferredAmount}
+        )
+    </insert>
+
+    <select id="getBySnapshotDate" resultMap="BalanceSnapshotResultMap">
+        select * from balance_snapshot where snapshot_date = #{snapshotDate}
+    </select>
+
+    <select id="getLatestSnapshot" resultMap="BalanceSnapshotResultMap">
+        select * from balance_snapshot order by snapshot_date desc limit 1
+    </select>
+
+    <select id="getAll" resultMap="BalanceSnapshotResultMap">
+        select * from balance_snapshot order by snapshot_date desc
+    </select>
+
+    <select id="getTotalBalanceAmount" resultType="java.math.BigDecimal">
+        select coalesce(sum(rechargeMoney), 0) from recharge
+    </select>
+
+    <select id="getTotalCardDeferredAmount" resultType="java.math.BigDecimal">
+        select coalesce(sum(deferred_amount - recognized_amount), 0)
+        from deferred_revenue
+        where biz_type = 'CARD' and status = 1
+    </select>
+
+    <select id="getTotalCourseDeferredAmount" resultType="java.math.BigDecimal">
+        select coalesce(sum(deferred_amount - recognized_amount), 0)
+        from deferred_revenue
+        where biz_type = 'COURSE' and status = 1
+    </select>
+
+</mapper>

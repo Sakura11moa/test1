@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.CourseStockLogMapper">
+
+    <resultMap id="CourseStockLogResultMap" type="com.gym.entity.CourseStockLog">
+        <id column="log_no" property="logNo" jdbcType="BIGINT"/>
+        <result column="member_no" property="memberNo" jdbcType="INTEGER"/>
+        <result column="course_no" property="courseNo" jdbcType="INTEGER"/>
+        <result column="change_times" property="changeTimes" jdbcType="INTEGER"/>
+        <result column="after_remain" property="afterRemain" jdbcType="INTEGER"/>
+        <result column="biz_type" property="bizType" jdbcType="VARCHAR"/>
+        <result column="biz_no" property="bizNo" jdbcType="VARCHAR"/>
+        <result column="remark" property="remark" jdbcType="VARCHAR"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="logNo">
+        INSERT INTO course_stock_log (member_no, course_no, change_times, after_remain, biz_type, biz_no, remark)
+        VALUES (#{memberNo}, #{courseNo}, #{changeTimes}, #{afterRemain}, #{bizType}, #{bizNo}, #{remark})
+    </insert>
+
+    <select id="listByMemberAndCourse" resultMap="CourseStockLogResultMap" resultType="com.gym.entity.CourseStockLog">
+        SELECT log_no, member_no, course_no, change_times, after_remain, biz_type, biz_no, remark, create_time
+        FROM course_stock_log
+        WHERE member_no = #{memberNo}
+          AND course_no = #{courseNo}
+        ORDER BY create_time DESC
+    </select>
+
+    <select id="getLatestPurchaseLog" resultMap="CourseStockLogResultMap">
+        SELECT * FROM course_stock_log
+        WHERE member_no = #{memberNo}
+          AND course_no = #{courseNo}
+          AND biz_type = 'PURCHASE'
+          AND change_times > 0
+        ORDER BY log_no DESC
+        LIMIT 1
+    </select>
+
+</mapper>

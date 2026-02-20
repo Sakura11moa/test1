@@ -1,0 +1,38 @@
+package com.gym.entity;
+
+import lombok.Data;
+
+import java.time.LocalDate;
+
+/**
+ * 报名 实体
+ *
+ * @author: ShanZhu
+ * @date: 2024-08-01
+ */
+@Data
+public class Register {
+
+    private Integer registerNo;
+
+    private Integer courseNo;
+
+    private Integer memberNo;
+
+    private String courseName;
+
+    private LocalDate courseTime;
+
+    private Integer courseDuration;
+
+    private Integer employeeNo;
+
+    private String employeeName;
+
+    private String employeePhone;
+
+    private String memberName;
+
+    private String memberPhone;
+
+}

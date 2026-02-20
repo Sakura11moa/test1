@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.CourseRefundMapper">
+
+    <resultMap id="CourseRefundResultMap" type="com.gym.entity.CourseRefund">
+        <id column="id" property="id"/>
+        <result column="member_no" property="memberNo"/>
+        <result column="memberName" property="memberName"/>
+        <result column="course_no" property="courseNo"/>
+        <result column="courseName" property="courseName"/>
+        <result column="deferred_id" property="deferredId"/>
+        <result column="original_purchase_no" property="originalPurchaseNo"/>
+        <result column="refund_times" property="refundTimes"/>
+        <result column="refund_amount" property="refundAmount"/>
+        <result column="refund_channel" property="refundChannel"/>
+        <result column="refundChannelName" property="refundChannelName"/>
+        <result column="refund_reason" property="refundReason"/>
+        <result column="operator_id" property="operatorId"/>
+        <result column="status" property="status"/>
+        <result column="remark" property="remark"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.gym.entity.CourseRefund" useGeneratedKeys="true" keyProperty="id">
+        insert into course_refund(
+            member_no, course_no, deferred_id, original_purchase_no, refund_times, refund_amount,
+            refund_channel, refund_reason, operator_id, status, remark
+        ) values (
+            #{memberNo}, #{courseNo}, #{deferredId}, #{originalPurchaseNo}, #{refundTimes}, #{refundAmount},
+            #{refundChannel}, #{refundReason}, #{operatorId}, #{status}, #{remark}
+        )
+    </insert>
+
+    <select id="getById" resultMap="CourseRefundResultMap">
+        select * from course_refund where id = #{id}
+    </select>
+
+    <select id="getByMemberNo" resultMap="CourseRefundResultMap">
+        select * from course_refund
+        <where>
+            <if test="memberNo != null">
+                and member_no = #{memberNo}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="getTotalRefundAmount" resultType="java.math.BigDecimal">
+        select coalesce(sum(refund_amount), 0)
+        from course_refund
+        <where>
+            <if test="memberNo != null">
+                and member_no = #{memberNo}
+            </if>
+            and status = 2
+        </where>
+    </select>
+
+    <select id="getTotalRefundAmountByPeriod" resultType="java.math.BigDecimal">
+        select coalesce(sum(refund_amount), 0)
+        from course_refund
+        where status = 2
+          and create_time &gt;= #{start}
+          and create_time &lt;= #{end}
+    </select>
+
+    <select id="getByPeriod" resultMap="CourseRefundResultMap">
+        select 
+            cr.id,
+            cr.member_no,
+            m.memberName as memberName,
+            cr.course_no,
+            c.courseName as courseName,
+            cr.deferred_id,
+            cr.original_purchase_no,
+            cr.refund_times,
+            cr.refund_amount,
+            cr.refund_channel,
+            CASE cr.refund_channel WHEN 'CASH' THEN '现金退回' WHEN 'BALANCE' THEN '退至余额' ELSE '' END as refundChannelName,
+            cr.refund_reason,
+            cr.operator_id,
+            cr.status,
+            cr.remark,
+            cr.create_time,
+            cr.update_time
+        from course_refund cr
+        LEFT JOIN member m ON cr.member_no = m.memberNo
+        LEFT JOIN course c ON cr.course_no = c.courseNo
+        where cr.create_time &gt;= #{start}
+          and cr.create_time &lt;= #{end}
+        order by cr.create_time desc
+    </select>
+
+</mapper>

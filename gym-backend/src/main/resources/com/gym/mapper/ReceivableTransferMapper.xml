@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.ReceivableTransferMapper">
+
+    <resultMap id="ReceivableTransferResultMap" type="com.gym.entity.ReceivableTransfer">
+        <id column="id" property="id"/>
+        <result column="member_no" property="memberNo"/>
+        <result column="from_source_type" property="fromSourceType"/>
+        <result column="from_source_no" property="fromSourceNo"/>
+        <result column="to_source_type" property="toSourceType"/>
+        <result column="to_renewal_no" property="toRenewalNo"/>
+        <result column="amount" property="amount"/>
+        <result column="status" property="status"/>
+        <result column="remark" property="remark"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.gym.entity.ReceivableTransfer" useGeneratedKeys="true" keyProperty="id">
+        insert into receivable_transfer(
+            member_no, from_source_type, from_source_no, to_source_type,
+            to_renewal_no, amount, status, remark
+        ) values (
+            #{memberNo}, #{fromSourceType}, #{fromSourceNo}, #{toSourceType},
+            #{toRenewalNo}, #{amount}, #{status}, #{remark}
+        )
+    </insert>
+
+    <select id="getById" resultMap="ReceivableTransferResultMap">
+        select * from receivable_transfer where id = #{id}
+    </select>
+
+    <select id="getByMemberNo" resultMap="ReceivableTransferResultMap">
+        select * from receivable_transfer
+        where member_no = #{memberNo}
+        order by create_time desc
+    </select>
+
+    <select id="getValidList" resultMap="ReceivableTransferResultMap">
+        select * from receivable_transfer
+        where member_no = #{memberNo} and status = 1
+        order by create_time desc
+    </select>
+
+    <update id="cancel">
+        update receivable_transfer set status = 2 where id = #{id}
+    </update>
+
+</mapper>

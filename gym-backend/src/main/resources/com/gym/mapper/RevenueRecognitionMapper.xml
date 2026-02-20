@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.RevenueRecognitionMapper">
+
+    <resultMap id="RevenueRecognitionResultMap" type="com.gym.entity.RevenueRecognition">
+        <id column="id" property="id"/>
+        <result column="member_no" property="memberNo"/>
+        <result column="memberName" property="memberName"/>
+        <result column="deferred_id" property="deferredId"/>
+        <result column="biz_type" property="bizType"/>
+        <result column="bizTypeName" property="bizTypeName"/>
+        <result column="recognition_type" property="recognitionType"/>
+        <result column="amount" property="amount"/>
+        <result column="period" property="period"/>
+        <result column="related_biz_no" property="relatedBizNo"/>
+        <result column="sourceBiz" property="sourceBiz"/>
+        <result column="biz_no" property="bizNo"/>
+        <result column="courseName" property="courseName"/>
+        <result column="courseNo" property="courseNo"/>
+        <result column="remark" property="remark"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.gym.entity.RevenueRecognition" useGeneratedKeys="true" keyProperty="id">
+        insert into revenue_recognition(
+            member_no, deferred_id, biz_type, recognition_type, amount,
+            period, related_biz_no, remark
+        ) values (
+            #{memberNo}, #{deferredId}, #{bizType}, #{recognitionType}, #{amount},
+            #{period}, #{relatedBizNo}, #{remark}
+        )
+    </insert>
+
+    <select id="getById" resultMap="RevenueRecognitionResultMap">
+        select * from revenue_recognition where id = #{id}
+    </select>
+
+    <select id="getByMemberNo" resultMap="RevenueRecognitionResultMap">
+        select * from revenue_recognition
+        <where>
+            <if test="memberNo != null">
+                and member_no = #{memberNo}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="getByPeriod" resultMap="RevenueRecognitionResultMap">
+        select 
+            rr.id,
+            rr.member_no,
+            m.memberName as memberName,
+            rr.deferred_id,
+            rr.biz_type,
+            CASE rr.biz_type WHEN 'CARD' THEN '会籍' WHEN 'COURSE' THEN '课程' ELSE '' END as bizTypeName,
+            rr.recognition_type,
+            rr.amount,
+            rr.period,
+            rr.related_biz_no as bizNo,
+            CASE rr.recognition_type 
+                WHEN 'MONTHLY' THEN CONCAT('会籍月摊销') 
+                WHEN 'COURSE_COMPLETE' THEN '课程核销' 
+                ELSE '' END as sourceBiz,
+            c.courseName as courseName,
+            cp.course_no as courseNo,
+            rr.remark,
+            rr.create_time
+        from revenue_recognition rr
+        LEFT JOIN member m ON rr.member_no = m.memberNo
+        LEFT JOIN deferred_revenue dr ON rr.deferred_id = dr.id
+        LEFT JOIN course_purchase cp ON dr.source_no = CAST(cp.purchase_no AS CHAR) AND dr.source_type = 'PURCHASE'
+        LEFT JOIN course c ON cp.course_no = c.courseNo
+        where rr.period = #{period}
+        order by rr.create_time desc
+    </select>
+
+    <select id="getByDeferredId" resultMap="RevenueRecognitionResultMap">
+        select * from revenue_recognition
+        where deferred_id = #{deferredId}
+        order by create_time desc
+    </select>
+
+    <select id="getTotalByPeriod" resultType="java.math.BigDecimal">
+        select coalesce(sum(amount), 0)
+        from revenue_recognition
+        where period = #{period}
+    </select>
+
+    <select id="getTotalByMember" resultType="java.math.BigDecimal">
+        select coalesce(sum(amount), 0)
+        from revenue_recognition
+        <where>
+            <if test="memberNo != null">
+                and member_no = #{memberNo}
+            </if>
+        </where>
+    </select>
+
+    <select id="getByTimeRange" resultMap="RevenueRecognitionResultMap">
+        select * from revenue_recognition
+        where create_time &gt;= #{start} and create_time &lt;= #{end}
+        order by create_time desc
+    </select>
+
+    <select id="getTotalByMemberAndBizType" resultType="java.math.BigDecimal">
+        select coalesce(sum(amount), 0)
+        from revenue_recognition
+        <where>
+            <if test="memberNo != null">
+                and member_no = #{memberNo}
+            </if>
+            <if test="bizType != null and bizType != ''">
+                and biz_type = #{bizType}
+            </if>
+        </where>
+    </select>
+
+    <select id="getTotalByPeriodAndBizType" resultType="java.math.BigDecimal">
+        select coalesce(sum(amount), 0)
+        from revenue_recognition
+        where period = #{period}
+          and biz_type = #{bizType}
+    </select>
+
+    <select id="getTotalByBizType" resultType="java.math.BigDecimal">
+        select coalesce(sum(amount), 0)
+        from revenue_recognition
+        where biz_type = #{bizType}
+    </select>
+
+</mapper>

@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.CourseStockMapper">
+
+    <resultMap id="CourseStockResultMap" type="com.gym.entity.CourseStock">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="member_no" property="memberNo" jdbcType="INTEGER"/>
+        <result column="course_no" property="courseNo" jdbcType="INTEGER"/>
+        <result column="total_times" property="totalTimes" jdbcType="INTEGER"/>
+        <result column="remain_times" property="remainTimes" jdbcType="INTEGER"/>
+        <result column="version" property="version" jdbcType="INTEGER"/>
+        <result column="update_time" property="updateTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <select id="getByMemberAndCourse" resultMap="CourseStockResultMap" resultType="com.gym.entity.CourseStock">
+        SELECT id, member_no, course_no, total_times, remain_times, version, update_time
+        FROM course_stock
+        WHERE member_no = #{memberNo}
+          AND course_no = #{courseNo}
+        LIMIT 1
+    </select>
+
+    <select id="findCourseNosWithPositiveStock" resultType="java.lang.Integer">
+        SELECT course_no
+        FROM course_stock
+        WHERE member_no = #{memberNo}
+          AND remain_times &gt; 0
+    </select>
+
+    <update id="deductStock">
+        UPDATE course_stock
+        SET remain_times = remain_times - 1,
+            version = version + 1
+        WHERE member_no = #{memberNo}
+          AND course_no = #{courseNo}
+          AND remain_times &gt;= 1
+    </update>
+
+    <update id="addStock">
+        UPDATE course_stock
+        SET remain_times = remain_times + #{delta},
+            total_times = total_times + CASE WHEN #{delta} &gt; 0 THEN #{delta} ELSE 0 END,
+            version = version + 1
+        WHERE member_no = #{memberNo}
+          AND course_no = #{courseNo}
+    </update>
+
+    <update id="returnStock">
+        UPDATE course_stock
+        SET remain_times = remain_times + 1,
+            version = version + 1
+        WHERE member_no = #{memberNo}
+          AND course_no = #{courseNo}
+    </update>
+
+    <insert id="upsertStock">
+        INSERT INTO course_stock (member_no, course_no, total_times, remain_times)
+        VALUES (#{memberNo}, #{courseNo}, #{totalTimes}, #{remainTimes})
+        ON DUPLICATE KEY UPDATE
+            total_times = total_times + VALUES(total_times),
+            remain_times = remain_times + VALUES(remain_times),
+            version = version + 1
+    </insert>
+
+    <!-- 退课扣减库存（带乐观锁） -->
+    <update id="deductStockForRefund">
+        UPDATE course_stock
+        SET remain_times = remain_times - #{refundTimes},
+            total_times = total_times - #{refundTimes},
+            version = version + 1
+        WHERE member_no = #{memberNo}
+          AND course_no = #{courseNo}
+          AND version = #{currentVersion}
+          AND remain_times >= #{refundTimes}
+    </update>
+
+    <select id="findCoursesWithPositiveStock" resultMap="com.gym.mapper.CourseMapper.CourseResultMap" resultType="com.gym.entity.Course">
+        SELECT
+            c.courseNo,
+            c.courseName,
+            c.courseDuration,
+            c.coursePrice,
+            c.courseDesc,
+            c.courseIntegral,
+            c.venueNo,
+            c.employeeNo,
+            c.managerNo,
+            cs.total_times AS totalTimes,
+            cs.remain_times AS remainTimes,
+            a.employeeName AS employeeNameCoach,
+            a.employeePhone AS employeePhoneCoach,
+            b.employeeName AS employeeNameManager,
+            b.employeePhone AS employeePhoneManager
+        FROM course_stock cs
+        JOIN course c ON cs.course_no = c.courseNo
+        LEFT JOIN employee a ON c.employeeNo = a.employeeNo
+        LEFT JOIN manager m ON c.managerNo = m.managerNo
+        LEFT JOIN employee b ON m.employeeNo = b.employeeNo
+        WHERE cs.member_no = #{memberNo}
+          AND cs.remain_times > 0
+        ORDER BY c.courseNo
+    </select>
+
+</mapper>

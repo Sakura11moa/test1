@@ -1,0 +1,335 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.FinanceMapper">
+
+    <resultMap id="MemberCardTypeResultMap" type="com.gym.entity.MemberCardType">
+        <id column="card_type_id" property="cardTypeId"/>
+        <result column="name" property="name"/>
+        <result column="days" property="days"/>
+        <result column="price" property="price"/>
+        <result column="status" property="status"/>
+    </resultMap>
+
+    <resultMap id="MemberCardRenewalResultMap" type="com.gym.entity.MemberCardRenewal">
+        <id column="renewal_no" property="renewalNo"/>
+        <result column="member_no" property="memberNo"/>
+        <result column="card_type_id" property="cardTypeId"/>
+        <result column="days_added" property="daysAdded"/>
+        <result column="amount" property="amount"/>
+        <result column="pay_channel" property="payChannel"/>
+        <result column="old_expire_time" property="oldExpireTime"/>
+        <result column="new_expire_time" property="newExpireTime"/>
+        <result column="operator_admin_id" property="operatorAdminId"/>
+        <result column="remark" property="remark"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <resultMap id="FinanceLedgerResultMap" type="com.gym.entity.FinanceLedger">
+        <id column="ledger_no" property="ledgerNo"/>
+        <result column="member_no" property="memberNo"/>
+        <result column="memberName" property="memberName"/>
+        <result column="memberPhone" property="memberPhone"/>
+        <result column="biz_type" property="bizType"/>
+        <result column="biz_no" property="bizNo"/>
+        <result column="direction" property="direction"/>
+        <result column="amount" property="amount"/>
+        <result column="channel" property="channel"/>
+        <result column="balance_after" property="balanceAfter"/>
+        <result column="operator_admin_id" property="operatorAdminId"/>
+        <result column="remark" property="remark"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <!-- 卡项配置 -->
+    <select id="getAllCardTypes" resultMap="MemberCardTypeResultMap">
+        select * from member_card_type where status = 1 order by card_type_id asc
+    </select>
+
+    <select id="getCardTypeById" resultMap="MemberCardTypeResultMap">
+        select * from member_card_type where card_type_id = #{cardTypeId}
+    </select>
+
+    <!-- 续卡记录 -->
+    <insert id="insertRenewal" parameterType="com.gym.entity.MemberCardRenewal" useGeneratedKeys="true" keyProperty="renewalNo">
+        insert into member_card_renewal(
+            member_no, card_type_id, days_added, amount, pay_channel,
+            old_expire_time, new_expire_time, operator_admin_id, remark
+        ) values (
+            #{memberNo}, #{cardTypeId}, #{daysAdded}, #{amount}, #{payChannel},
+            #{oldExpireTime, typeHandler=com.gym.utils.LocalDateTimeHandler}, #{newExpireTime, typeHandler=com.gym.utils.LocalDateTimeHandler}, #{operatorAdminId}, #{remark}
+        )
+    </insert>
+
+    <select id="getRenewalList" resultMap="MemberCardRenewalResultMap">
+        select * from member_card_renewal
+        where 1=1
+        <if test="memberNo != null">
+            and member_no = #{memberNo}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            and create_time &gt;= #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            and create_time &lt;= #{endTime}
+        </if>
+        order by create_time desc
+    </select>
+
+    <!-- 财务流水 -->
+    <insert id="insertLedger" parameterType="com.gym.entity.FinanceLedger" useGeneratedKeys="true" keyProperty="ledgerNo">
+        insert into finance_ledger(
+            member_no, biz_type, biz_no, direction, amount, channel,
+            balance_after, operator_admin_id, remark
+        ) values (
+            #{memberNo}, #{bizType}, #{bizNo}, #{direction}, #{amount}, #{channel},
+            #{balanceAfter}, #{operatorAdminId}, #{remark}
+        )
+    </insert>
+
+    <sql id="LedgerWhere">
+        where 1=1
+        <if test="start != null and start != ''">
+            and create_time &gt;= #{start}
+        </if>
+        <if test="end != null and end != ''">
+            and create_time &lt;= #{end}
+        </if>
+        <if test="bizType != null and bizType != ''">
+            and biz_type = #{bizType}
+        </if>
+        <if test="memberNo != null and memberNo != ''">
+            and member_no = #{memberNo}
+        </if>
+        <if test="channel != null and channel != ''">
+            and channel = #{channel}
+        </if>
+        <if test="direction != null and direction != ''">
+            and direction = #{direction}
+        </if>
+    </sql>
+
+    <select id="getLedgerList" resultMap="FinanceLedgerResultMap">
+        select * from finance_ledger
+        <include refid="LedgerWhere"/>
+        order by create_time desc
+        <if test="page != null and size != null">
+            limit #{page}, #{size}
+        </if>
+    </select>
+
+    <select id="getLedgerCount" resultType="long">
+        select count(1) from finance_ledger
+        <include refid="LedgerWhere"/>
+    </select>
+
+    <select id="getLedgerListForExport" resultMap="FinanceLedgerResultMap">
+        select ledger_no, member_no, biz_type, biz_no, direction, amount, channel,
+               balance_after, operator_admin_id, remark, create_time
+        from finance_ledger
+        <include refid="LedgerWhere"/>
+        order by create_time desc
+    </select>
+
+    <!-- 日报（按天聚合）- 只统计实际现金流：IN收入/OUT支出，忽略NONE内部调账 -->
+    <select id="getDailyReport" resultType="map">
+        select
+            date(fl.create_time) as stat_date,
+            sum(case when fl.biz_type='RECHARGE' and fl.direction='IN' then fl.amount else 0 end) as recharge_in,
+            sum(case when fl.biz_type='PURCHASE' and fl.direction='OUT' then fl.amount else 0 end) as purchase_out,
+            sum(case when fl.biz_type='CARD_RENEW' and fl.direction='IN' and fl.channel='CASH' then fl.amount else 0 end) as renew_cash_amount,
+            coalesce(dr.daily_prepaid, 0) as course_prepaid_in
+        from finance_ledger fl
+        left join (
+            select date(create_time) as stat_date, sum(source_amount) as daily_prepaid
+            from deferred_revenue
+            where source_type = 'PURCHASE' and create_time &gt;= #{start} and create_time &lt;= #{end}
+            group by date(create_time)
+        ) dr on date(fl.create_time) = dr.stat_date
+        where fl.create_time &gt;= #{start} and fl.create_time &lt;= #{end}
+          and fl.direction != 'NONE'  -- 忽略内部调账
+        group by date(fl.create_time), dr.daily_prepaid
+        order by stat_date asc
+    </select>
+
+    <!-- 月报（按月聚合：传 year=2026）- 只统计实际现金流 -->
+    <select id="getMonthlyReport" resultType="map">
+        select
+            date_format(fl.create_time, '%Y-%m') as stat_month,
+            sum(case when fl.biz_type='RECHARGE' and fl.direction='IN' then fl.amount else 0 end) as recharge_in,
+            sum(case when fl.biz_type='PURCHASE' and fl.direction='OUT' then fl.amount else 0 end) as purchase_out,
+            sum(case when fl.biz_type='CARD_RENEW' and fl.direction='IN' and fl.channel='CASH' then fl.amount else 0 end) as renew_cash_amount,
+            coalesce(dr.monthly_prepaid, 0) as course_prepaid_in
+        from finance_ledger fl
+        left join (
+            select date_format(create_time, '%Y-%m') as stat_month, sum(source_amount) as monthly_prepaid
+            from deferred_revenue
+            where source_type = 'PURCHASE' and date_format(create_time, '%Y') = #{year}
+            group by date_format(create_time, '%Y-%m')
+        ) dr on date_format(fl.create_time, '%Y-%m') = dr.stat_month
+        where date_format(fl.create_time, '%Y') = #{year}
+          and fl.direction != 'NONE'  -- 忽略内部调账
+        group by date_format(fl.create_time, '%Y-%m'), dr.monthly_prepaid
+        order by stat_month asc
+    </select>
+
+    <!-- 现金收款流水（仅充值+现金续卡，过滤内部调账） -->
+    <select id="getCashFlowList" resultMap="FinanceLedgerResultMap">
+        select fl.*, m.memberName, m.memberPhone
+        from finance_ledger fl
+        LEFT JOIN member m ON fl.member_no = m.memberNo
+        where fl.direction != 'NONE'  -- 过滤内部调账
+          and (
+            (fl.biz_type = 'RECHARGE' and fl.direction = 'IN')  -- 充值
+            or (fl.biz_type = 'CARD_RENEW' and fl.channel = 'CASH')  -- 现金续卡
+          )
+        <if test="start != null and start != ''">
+            and fl.create_time &gt;= #{start}
+        </if>
+        <if test="end != null and end != ''">
+            and fl.create_time &lt;= #{end}
+        </if>
+        <if test="channels != null and channels.size > 0">
+            and fl.channel IN
+            <foreach item="channel" index="index" collection="channels" open="(" separator="," close=")">
+                #{channel}
+            </foreach>
+        </if>
+        order by fl.create_time desc
+        <if test="page != null and size != null">
+            limit #{page}, #{size}
+        </if>
+    </select>
+
+    <!-- 现金收款流水总金额 -->
+    <select id="getCashFlowTotalAmount" resultType="java.math.BigDecimal">
+        select coalesce(sum(fl.amount), 0)
+        from finance_ledger fl
+        LEFT JOIN member m ON fl.member_no = m.memberNo
+        where fl.direction != 'NONE'
+          and (
+            (fl.biz_type = 'RECHARGE' and fl.direction = 'IN')
+            or (fl.biz_type = 'CARD_RENEW' and fl.channel = 'CASH')
+          )
+        <if test="start != null and start != ''">
+            and fl.create_time &gt;= #{start}
+        </if>
+        <if test="end != null and end != ''">
+            and fl.create_time &lt;= #{end}
+        </if>
+        <if test="channels != null and channels.size > 0">
+            and fl.channel IN
+            <foreach item="channel" index="index" collection="channels" open="(" separator="," close=")">
+                #{channel}
+            </foreach>
+        </if>
+    </select>
+
+    <select id="getCashFlowCount" resultType="long">
+        select count(1) from finance_ledger fl
+        where fl.direction != 'NONE'
+          and (
+            (fl.biz_type = 'RECHARGE' and fl.direction = 'IN')
+            or (fl.biz_type = 'CARD_RENEW' and fl.channel = 'CASH')
+          )
+        <if test="start != null and start != ''">
+            and fl.create_time &gt;= #{start}
+        </if>
+        <if test="end != null and end != ''">
+            and fl.create_time &lt;= #{end}
+        </if>
+        <if test="channels != null and channels.size > 0">
+            and fl.channel IN
+            <foreach item="channel" index="index" collection="channels" open="(" separator="," close=")">
+                #{channel}
+            </foreach>
+        </if>
+    </select>
+
+    <!-- 现金收款汇总（按天聚合） -->
+    <select id="getCashSummaryByDay" resultType="map">
+        select
+            date(fl.create_time) as stat_date,
+            sum(case when fl.biz_type='RECHARGE' then fl.amount else 0 end) as recharge_amount,
+            sum(case when fl.biz_type='CARD_RENEW' and fl.channel='CASH' then fl.amount else 0 end) as renew_cash_amount,
+            sum(fl.amount) as total_amount
+        from finance_ledger fl
+        where fl.direction != 'NONE'
+          and (
+            (fl.biz_type = 'RECHARGE' and fl.direction = 'IN')
+            or (fl.biz_type = 'CARD_RENEW' and fl.channel = 'CASH')
+          )
+        <if test="start != null and start != ''">
+            and fl.create_time &gt;= #{start}
+        </if>
+        <if test="end != null and end != ''">
+            and fl.create_time &lt;= #{end}
+        </if>
+        group by date(fl.create_time)
+        order by stat_date asc
+    </select>
+
+    <!-- 现金收款汇总（总计） -->
+    <select id="getCashSummaryTotal" resultType="map">
+        select
+            sum(case when fl.biz_type='RECHARGE' then fl.amount else 0 end) as recharge_amount,
+            sum(case when fl.biz_type='CARD_RENEW' and fl.channel='CASH' then fl.amount else 0 end) as renew_cash_amount,
+            sum(fl.amount) as total_amount
+        from finance_ledger fl
+        where fl.direction != 'NONE'
+          and (
+            (fl.biz_type = 'RECHARGE' and fl.direction = 'IN')
+            or (fl.biz_type = 'CARD_RENEW' and fl.channel = 'CASH')
+          )
+        <if test="start != null and start != ''">
+            and fl.create_time &gt;= #{start}
+        </if>
+        <if test="end != null and end != ''">
+            and fl.create_time &lt;= #{end}
+        </if>
+    </select>
+
+    <!-- 现金收款汇总（按天聚合）- 新版 -->
+    <select id="getDailyCashSummary" resultType="map">
+        select
+            date(fl.create_time) as period,
+            sum(case when fl.biz_type='RECHARGE' then fl.amount else 0 end) as rechargeAmount,
+            sum(case when fl.biz_type='CARD_RENEW' then fl.amount else 0 end) as renewAmount,
+            sum(case when fl.channel='CASH' then fl.amount else 0 end) as cashAmount,
+            sum(case when fl.channel='ONLINE' then fl.amount else 0 end) as onlineAmount,
+            sum(fl.amount) as totalAmount
+        from finance_ledger fl
+        where fl.direction = 'IN'
+          and fl.biz_type IN ('RECHARGE', 'CARD_RENEW')
+          and fl.channel IN ('CASH', 'ONLINE')
+        <if test="start != null and start != ''">
+            and fl.create_time &gt;= #{start}
+        </if>
+        <if test="end != null and end != ''">
+            and fl.create_time &lt;= #{end}
+        </if>
+        group by date(fl.create_time)
+        order by period asc
+    </select>
+
+    <!-- 现金收款汇总（按月聚合） -->
+    <select id="getMonthlyCashSummary" resultType="map">
+        select
+            date_format(fl.create_time, '%Y-%m') as period,
+            sum(case when fl.biz_type='RECHARGE' then fl.amount else 0 end) as rechargeAmount,
+            sum(case when fl.biz_type='CARD_RENEW' then fl.amount else 0 end) as renewAmount,
+            sum(case when fl.channel='CASH' then fl.amount else 0 end) as cashAmount,
+            sum(case when fl.channel='ONLINE' then fl.amount else 0 end) as onlineAmount,
+            sum(fl.amount) as totalAmount
+        from finance_ledger fl
+        where fl.direction = 'IN'
+          and fl.biz_type IN ('RECHARGE', 'CARD_RENEW')
+          and fl.channel IN ('CASH', 'ONLINE')
+          and date_format(fl.create_time, '%Y') = #{year}
+        group by date_format(fl.create_time, '%Y-%m')
+        order by period asc
+    </select>
+
+</mapper>

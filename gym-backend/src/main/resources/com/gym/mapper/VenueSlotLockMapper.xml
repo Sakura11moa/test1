@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.VenueSlotLockMapper">
+
+    <resultMap id="VenueSlotLockResultMap" type="com.gym.entity.VenueSlotLock">
+        <id column="lock_no" property="lockNo" jdbcType="BIGINT"/>
+        <result column="venue_no" property="venueNo" jdbcType="INTEGER"/>
+        <result column="start_time" property="startTime" jdbcType="TIMESTAMP"/>
+        <result column="end_time" property="endTime" jdbcType="TIMESTAMP"/>
+        <result column="lock_type" property="lockType" jdbcType="VARCHAR"/>
+        <result column="remark" property="remark" jdbcType="VARCHAR"/>
+        <result column="status" property="status" jdbcType="INTEGER"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="lockNo">
+        INSERT INTO venue_slot_lock (venue_no, start_time, end_time, lock_type, remark, status)
+        VALUES (#{venueNo}, #{startTime}, #{endTime}, #{lockType}, #{remark}, #{status})
+    </insert>
+
+    <select id="findOverlappingLocks" resultMap="VenueSlotLockResultMap">
+        SELECT lock_no, venue_no, start_time, end_time, lock_type, remark, status, create_time
+        FROM venue_slot_lock
+        WHERE venue_no = #{venueNo}
+          AND status = 0
+          AND start_time &lt; #{endTime}
+          AND end_time &gt; #{startTime}
+        ORDER BY start_time
+    </select>
+
+    <update id="updateStatus">
+        UPDATE venue_slot_lock
+        SET status = #{status}
+        WHERE lock_no = #{lockNo}
+    </update>
+
+</mapper>

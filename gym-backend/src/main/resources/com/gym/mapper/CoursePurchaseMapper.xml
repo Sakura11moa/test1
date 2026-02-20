@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.CoursePurchaseMapper">
+
+    <resultMap id="CoursePurchaseResultMap" type="com.gym.entity.CoursePurchase">
+        <id column="purchase_no" property="purchaseNo" jdbcType="BIGINT"/>
+        <result column="member_no" property="memberNo" jdbcType="INTEGER"/>
+        <result column="course_no" property="courseNo" jdbcType="INTEGER"/>
+        <result column="quantity" property="quantity" jdbcType="INTEGER"/>
+        <result column="unit_price" property="unitPrice" jdbcType="DECIMAL"/>
+        <result column="total_amount" property="totalAmount" jdbcType="DECIMAL"/>
+        <result column="status" property="status" jdbcType="VARCHAR"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="purchaseNo">
+        INSERT INTO course_purchase (member_no, course_no, quantity, unit_price, total_amount, status, create_time)
+        VALUES (#{memberNo}, #{courseNo}, #{quantity}, #{unitPrice}, #{totalAmount}, #{status}, #{createTime})
+    </insert>
+
+    <select id="getByPurchaseNo" resultMap="CoursePurchaseResultMap">
+        SELECT purchase_no, member_no, course_no, quantity, unit_price, total_amount, status, create_time
+        FROM course_purchase
+        WHERE purchase_no = #{purchaseNo}
+    </select>
+
+    <select id="listByMember" resultMap="CoursePurchaseResultMap" resultType="com.gym.entity.CoursePurchase">
+        SELECT purchase_no, member_no, course_no, quantity, unit_price, total_amount, status, create_time
+        FROM course_purchase
+        WHERE member_no = #{memberNo}
+        ORDER BY create_time DESC
+    </select>
+
+</mapper>

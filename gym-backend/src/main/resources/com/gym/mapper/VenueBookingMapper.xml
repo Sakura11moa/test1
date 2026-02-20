@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.VenueBookingMapper">
+
+    <resultMap id="VenueBookingResultMap" type="com.gym.entity.VenueBooking">
+        <id column="booking_no" property="bookingNo" jdbcType="INTEGER"></id>
+        <result column="member_no" property="memberNo" jdbcType="INTEGER"></result>
+        <result column="course_no" property="courseNo" jdbcType="INTEGER"></result>
+        <result column="purchase_no" property="purchaseNo" jdbcType="INTEGER"></result>
+        <result column="venue_no" property="venueNo" jdbcType="INTEGER"></result>
+        <result column="start_time" property="startTime" jdbcType="TIMESTAMP"></result>
+        <result column="end_time" property="endTime" jdbcType="TIMESTAMP"></result>
+        <result column="duration_minutes" property="durationMinutes" jdbcType="INTEGER"></result>
+        <result column="time_slot" property="timeSlot" jdbcType="VARCHAR"></result>
+        <result column="consume_log_no" property="consumeLogNo" jdbcType="BIGINT"></result>
+        <result column="booking_time" property="bookingTime" jdbcType="TIMESTAMP"></result>
+        <result column="booking_date" property="bookingDate" jdbcType="DATE"></result>
+        <result column="status" property="status" jdbcType="VARCHAR"></result>
+        <result column="audit_admin_id" property="auditAdminId" jdbcType="INTEGER"></result>
+        <result column="audit_time" property="auditTime" jdbcType="TIMESTAMP"></result>
+        <result column="reject_reason" property="rejectReason" jdbcType="VARCHAR"></result>
+        <result column="timeout_at" property="timeoutAt" jdbcType="TIMESTAMP"></result>
+        <result column="version" property="version" jdbcType="INTEGER"></result>
+    </resultMap>
+
+    <resultMap id="MyVenueBookingResultMap" type="com.gym.entity.MyVenueBooking">
+        <id column="booking_no" property="bookingNo" jdbcType="INTEGER"></id>
+        <result column="courseName" property="courseName" jdbcType="VARCHAR"></result>
+        <result column="venueName" property="venueName" jdbcType="VARCHAR"></result>
+        <result column="venueLocation" property="venueLocation" jdbcType="VARCHAR"></result>
+        <result column="booking_time" property="bookingTime" jdbcType="TIMESTAMP"></result>
+        <result column="booking_date" property="bookingDate" jdbcType="DATE"></result>
+        <result column="start_time" property="startTime" jdbcType="TIMESTAMP"></result>
+        <result column="end_time" property="endTime" jdbcType="TIMESTAMP"></result>
+        <result column="consume_log_no" property="consumeLogNo" jdbcType="BIGINT"></result>
+        <result column="status" property="status" jdbcType="VARCHAR"></result>
+        <result column="rejectReason" property="rejectReason" jdbcType="VARCHAR"></result>
+        <result column="auditTime" property="auditTime" jdbcType="TIMESTAMP"></result>
+    </resultMap>
+
+    <insert id="addVenueBooking" useGeneratedKeys="true" keyProperty="bookingNo">
+        INSERT INTO venue_booking (member_no, course_no, venue_no, start_time, end_time, duration_minutes, time_slot, consume_log_no, booking_date, status, timeout_at, version)
+        VALUES (#{memberNo}, #{courseNo}, #{venueNo}, #{startTime}, #{endTime}, #{durationMinutes}, #{timeSlot}, #{consumeLogNo}, #{bookingDate}, #{status}, #{timeoutAt}, #{version})
+    </insert>
+
+    <update id="updateBookingStatus">
+        UPDATE venue_booking
+        SET status = #{newStatus},
+            audit_admin_id = #{adminId},
+            audit_time = NOW(),
+            reject_reason = #{rejectReason},
+            version = version + 1
+        WHERE booking_no = #{bookingNo}
+          AND status = #{oldStatus}
+          AND version = #{version}
+    </update>
+
+    <select id="getPendingBookings" resultMap="VenueBookingResultMap">
+        SELECT * FROM venue_booking WHERE status = '0' ORDER BY booking_time ASC
+    </select>
+
+    <select id="getPendingBookingsByCoach" resultMap="VenueBookingResultMap">
+        SELECT vb.*
+        FROM venue_booking vb
+        JOIN course c ON vb.course_no = c.courseNo
+        WHERE vb.status = '0'
+          AND c.employeeNo = #{employeeNo}
+        ORDER BY vb.booking_time ASC
+    </select>
+
+    <select id="getMyVenueBookings" resultMap="MyVenueBookingResultMap">
+        SELECT
+            vb.booking_no,
+            c.courseName AS courseName,
+            v.venue_name AS venueName,
+            v.venue_location AS venueLocation,
+            vb.booking_time,
+            vb.booking_date,
+            vb.start_time,
+            vb.end_time,
+            vb.consume_log_no,
+            vb.status,
+            vb.reject_reason as rejectReason,
+            vb.audit_time as auditTime,
+            CASE WHEN ce.eval_no IS NOT NULL THEN 1 ELSE 0 END as isEvaluated
+        FROM venue_booking vb
+        INNER JOIN course c ON vb.course_no = c.courseNo
+        INNER JOIN venue v ON vb.venue_no = v.venue_no
+        LEFT JOIN course_evaluation ce ON vb.booking_no = ce.booking_no
+        WHERE vb.member_no = #{memberNo}
+        ORDER BY vb.booking_date DESC, vb.booking_time DESC
+    </select>
+
+    <!-- 查询指定日期各场地的已占用时段（status='0' 或 '1'） -->
+    <select id="getBookedSlotsByDate" resultType="java.util.Map">
+        SELECT
+            venue_no AS venueNo,
+            time_slot AS timeSlot
+        FROM venue_booking
+        WHERE status IN ('0', '1')
+          AND booking_date = #{date}
+        ORDER BY venue_no, time_slot
+    </select>
+
+    <select id="findOverlappingBookingsExcl" resultMap="VenueBookingResultMap">
+        SELECT * FROM venue_booking
+        WHERE venue_no = #{venueNo}
+          AND status IN ('0', '1')
+          AND booking_no != #{excludeBookingNo}
+          AND start_time &lt; #{endTime}
+          AND end_time &gt; #{startTime}
+    </select>
+
+    <select id="findMemberOverlappingBookingsExcl" resultMap="VenueBookingResultMap">
+        SELECT * FROM venue_booking
+        WHERE member_no = #{memberNo}
+          AND status IN ('0', '1')
+          AND booking_no != #{excludeBookingNo}
+          AND start_time &lt; #{endTime}
+          AND end_time &gt; #{startTime}
+    </select>
+
+    <update id="cancelVenueBooking">
+        UPDATE venue_booking
+        SET status = '3'
+        WHERE booking_no = #{bookingNo}
+          AND member_no = #{memberNo}
+          AND status IN ('0', '1')
+    </update>
+
+    <update id="updateConsumeLogNo">
+        UPDATE venue_booking
+        SET consume_log_no = #{consumeLogNo}
+        WHERE booking_no = #{bookingNo}
+    </update>
+
+    <update id="updatePurchaseNo">
+        UPDATE venue_booking
+        SET purchase_no = #{purchaseNo}
+        WHERE booking_no = #{bookingNo}
+    </update>
+
+    <select id="getVenueBookingByNo" resultMap="VenueBookingResultMap">
+        SELECT * FROM venue_booking WHERE booking_no = #{bookingNo}
+    </select>
+
+    <select id="getAllBookingsWithDetails" resultType="com.gym.entity.AdminVenueBookingVO">
+        SELECT
+            vb.booking_no AS bookingNo,
+            vb.member_no AS memberNo,
+            m.memberName AS memberName,
+            m.memberPhone AS memberPhone,
+            vb.course_no AS courseNo,
+            c.courseName AS courseName,
+            c.employeeNo AS employeeNo,
+            e.employeeName AS employeeNameCoach,
+            vb.venue_no AS venueNo,
+            v.venue_name AS venueName,
+            v.venue_location AS venueLocation,
+            vb.booking_time AS bookingTime,
+            vb.booking_date AS bookingDate,
+            vb.time_slot AS timeSlot,
+            vb.start_time AS startTime,
+            vb.end_time AS endTime,
+            vb.consume_log_no AS consumeLogNo,
+            vb.status AS status,
+            vb.audit_admin_id AS auditAdminId,
+            vb.audit_time AS auditTime,
+            vb.reject_reason AS rejectReason,
+            vb.version AS version
+        FROM venue_booking vb
+        LEFT JOIN member m ON vb.member_no = m.memberNo
+        LEFT JOIN course c ON vb.course_no = c.courseNo
+        LEFT JOIN venue v ON vb.venue_no = v.venue_no
+        LEFT JOIN employee e ON c.employeeNo = e.employeeNo
+        ORDER BY vb.booking_date DESC, vb.booking_time DESC
+    </select>
+
+</mapper>
+
+

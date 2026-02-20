@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.VenueMapper">
+
+    <resultMap id="VenueResultMap" type="com.gym.entity.Venue">
+        <id column="venue_no" property="venueNo" jdbcType="INTEGER"></id>
+        <result column="venue_name" property="venueName" jdbcType="VARCHAR"></result>
+        <result column="venue_type" property="venueType" jdbcType="VARCHAR"></result>
+        <result column="venue_location" property="venueLocation" jdbcType="VARCHAR"></result>
+        <result column="venue_capacity" property="venueCapacity" jdbcType="INTEGER"></result>
+        <result column="venue_state" property="venueState" jdbcType="VARCHAR"></result>
+        <result column="open_time" property="openTime" jdbcType="VARCHAR"></result>
+        <result column="venue_message" property="venueMessage" jdbcType="VARCHAR"></result>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"></result>
+        <result column="update_time" property="updateTime" jdbcType="TIMESTAMP"></result>
+    </resultMap>
+
+    <resultMap id="VenueSumResultMap" type="com.gym.entity.Common">
+        <result column="dataTotal" property="dataTotal" jdbcType="INTEGER"></result>
+    </resultMap>
+
+    <!--查找所有场地信息-->
+    <select id="getAllVenue" resultMap="VenueResultMap" resultType="com.gym.entity.Venue">
+        select venue_no, venue_name, venue_type, venue_location, venue_capacity,
+               venue_state, open_time, venue_message, create_time, update_time
+        from venue order by venue_no limit #{page},#{size}
+    </select>
+
+    <!--添加场地-->
+    <insert id="addVenue">
+        INSERT INTO venue ( venue_name, venue_type, venue_location, venue_capacity, venue_state, open_time, venue_message)
+        VALUES(#{venueName},#{venueType},#{venueLocation},#{venueCapacity},#{venueState},#{openTime},#{venueMessage});
+    </insert>
+
+    <!--修改场地信息-->
+    <update id="updateVenue">
+        UPDATE venue SET venue_name=#{venueName}, venue_type=#{venueType}, venue_location=#{venueLocation},
+                        venue_capacity=#{venueCapacity}, venue_state=#{venueState}, open_time=#{openTime}, venue_message=#{venueMessage}
+        WHERE venue_no = #{venueNo}
+    </update>
+
+    <!--删除场地表信息-->
+    <delete id="deleteVenue">
+        DELETE FROM venue WHERE venue_no=#{venueNo};
+    </delete>
+
+    <!--查找场地表数据总条数-->
+    <select id="totalVenue" resultMap="VenueSumResultMap" resultType="com.gym.entity.Common">
+        Select COUNT(*) as dataTotal from venue
+    </select>
+
+    <!-- 模糊查询-->
+    <select id="getByKeywordVenue" resultMap="VenueResultMap"  resultType="com.gym.entity.Venue">
+        select venue_no, venue_name, venue_type, venue_location, venue_capacity,
+               venue_state, open_time, venue_message, create_time, update_time
+        from venue
+        where venue_name like concat('%',#{keyWord},'%')
+        or venue_type like concat('%',#{keyWord},'%')
+        or venue_location like concat('%',#{keyWord},'%')
+        or venue_capacity like concat('%',#{keyWord},'%')
+        or venue_state like concat('%',#{keyWord},'%')
+        or open_time like concat('%',#{keyWord},'%')
+        or venue_message like concat('%',#{keyWord},'%')
+        order by venue_no limit #{page},#{size};
+    </select>
+
+    <!-- 模糊查询查找场地表数据总条数-->
+    <select id="totalVenueFuzzy" resultMap="VenueSumResultMap"  resultType="com.gym.entity.Common">
+        select COUNT(*) as dataTotal from venue
+        where venue_name like concat('%',#{keyWord},'%')
+        or venue_type like concat('%',#{keyWord},'%')
+        or venue_location like concat('%',#{keyWord},'%')
+        or venue_capacity like concat('%',#{keyWord},'%')
+        or venue_state like concat('%',#{keyWord},'%')
+        or open_time like concat('%',#{keyWord},'%')
+        or venue_message like concat('%',#{keyWord},'%') ;
+    </select>
+
+    <!-- 根据日期和时间范围查询可用的场地列表 -->
+    <select id="findAvailableVenues" resultMap="VenueResultMap">
+        SELECT v.*
+        FROM venue v
+        WHERE v.venue_state = '1'
+          AND NOT EXISTS (
+            SELECT 1 FROM venue_booking vb
+            WHERE vb.venue_no = v.venue_no
+              AND vb.status IN ('0', '1')
+              AND vb.start_time &lt; #{endTime}
+              AND vb.end_time &gt; #{startTime}
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM venue_slot_lock vsl
+            WHERE vsl.venue_no = v.venue_no
+              AND vsl.status = 0
+              AND vsl.start_time &lt; #{endTime}
+              AND vsl.end_time &gt; #{startTime}
+          )
+    </select>
+
+    <select id="getVenueByNo" resultMap="VenueResultMap">
+        SELECT venue_no, venue_name, venue_type, venue_location, venue_capacity,
+               venue_state, open_time, venue_message, create_time, update_time
+        FROM venue
+        WHERE venue_no = #{venueNo}
+        LIMIT 1
+    </select>
+
+    <!--原子占用场地：可用(1)->已预订(3)-->
+    <update id="occupyVenueIfAvailable">
+        UPDATE venue
+        SET venue_state = '3'
+        WHERE venue_no = #{venueNo}
+          AND venue_state = '1'
+    </update>
+
+    <!--释放场地：恢复可用(1)-->
+    <update id="releaseVenue">
+        UPDATE venue
+        SET venue_state = '1'
+        WHERE venue_no = #{venueNo}
+    </update>
+</mapper>

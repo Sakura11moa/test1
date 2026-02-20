@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.DeferredRevenueMapper">
+
+    <resultMap id="DeferredRevenueResultMap" type="com.gym.entity.DeferredRevenue">
+        <id column="id" property="id"/>
+        <result column="member_no" property="memberNo"/>
+        <result column="source_type" property="sourceType"/>
+        <result column="source_no" property="sourceNo"/>
+        <result column="source_amount" property="sourceAmount"/>
+        <result column="deferred_amount" property="deferredAmount"/>
+        <result column="recognized_amount" property="recognizedAmount"/>
+        <result column="biz_type" property="bizType"/>
+        <result column="source_channel" property="sourceChannel"/>
+        <result column="total_periods" property="totalPeriods"/>
+        <result column="recognized_periods" property="recognizedPeriods"/>
+        <result column="status" property="status"/>
+        <result column="start_date" property="startDate"/>
+        <result column="end_date" property="endDate"/>
+        <result column="remark" property="remark"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.gym.entity.DeferredRevenue" useGeneratedKeys="true" keyProperty="id">
+        insert into deferred_revenue(
+            member_no, source_type, source_no, source_amount, deferred_amount,
+            recognized_amount, biz_type, source_channel, total_periods, recognized_periods,
+            status, start_date, end_date, remark
+        ) values (
+            #{memberNo}, #{sourceType}, #{sourceNo}, #{sourceAmount}, #{deferredAmount},
+            #{recognizedAmount}, #{bizType}, #{sourceChannel}, #{totalPeriods}, #{recognizedPeriods},
+            #{status}, #{startDate}, #{endDate}, #{remark}
+        )
+    </insert>
+
+    <select id="getById" resultMap="DeferredRevenueResultMap">
+        select * from deferred_revenue where id = #{id}
+    </select>
+
+    <select id="getBySource" resultMap="DeferredRevenueResultMap">
+        select * from deferred_revenue
+        where source_type = #{sourceType} and source_no = #{sourceNo}
+    </select>
+
+    <update id="updateRecognizedAmount">
+        update deferred_revenue
+        set recognized_amount = #{recognizedAmount},
+            recognized_periods = #{recognizedPeriods},
+            status = case when recognized_amount + 0 >= source_amount then 2 else status end
+        where id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        update deferred_revenue set status = #{status} where id = #{id}
+    </update>
+
+    <select id="getPendingList" resultMap="DeferredRevenueResultMap">
+        select * from deferred_revenue
+        where member_no = #{memberNo} and status = 1
+        order by create_time desc
+    </select>
+
+    <select id="getActiveList" resultMap="DeferredRevenueResultMap">
+        select * from deferred_revenue
+        where biz_type = #{bizType} and status = 1
+        order by create_time desc
+    </select>
+
+    <select id="getByMemberNo" resultMap="DeferredRevenueResultMap">
+        select * from deferred_revenue
+        <where>
+            <if test="memberNo != null">
+                and member_no = #{memberNo}
+            </if>
+        </where>
+        order by create_time desc
+    </select>
+
+    <select id="getTotalDeferredAmount" resultType="java.math.BigDecimal">
+        select coalesce(sum(deferred_amount - recognized_amount), 0)
+        from deferred_revenue
+        <where>
+            <if test="memberNo != null">
+                and member_no = #{memberNo}
+            </if>
+            <if test="bizType != null and bizType != ''">
+                and biz_type = #{bizType}
+            </if>
+            and status = 1
+        </where>
+    </select>
+
+    <select id="getTotalDeferredAmountByChannel" resultType="java.math.BigDecimal">
+        select coalesce(sum(deferred_amount - recognized_amount), 0)
+        from deferred_revenue
+        <where>
+            <if test="memberNo != null">
+                and member_no = #{memberNo}
+            </if>
+            <if test="bizType != null and bizType != ''">
+                and biz_type = #{bizType}
+            </if>
+            <if test="sourceChannel != null and sourceChannel != ''">
+                and source_channel = #{sourceChannel}
+            </if>
+            and status = 1
+        </where>
+    </select>
+
+    <!-- 到期时间分布查询 -->
+    <select id="getMaturityDistribution" resultMap="DeferredRevenueResultMap">
+        select * from deferred_revenue
+        where status = 1
+          and end_date is not null
+        order by end_date asc
+    </select>
+
+    <!-- 按生效日期统计本月新增会籍负债（使用未消耗余额） -->
+    <select id="getNewCardLiabilityByEffectiveDate" resultType="java.math.BigDecimal">
+        select coalesce(sum(deferred_amount - recognized_amount), 0)
+        from deferred_revenue
+        where biz_type = 'CARD'
+          and status = 1
+          and start_date is not null
+          and date_format(start_date, '%Y-%m') = #{yearMonth}
+    </select>
+
+    <!-- 按生效日期统计本月新增课程负债（使用未消耗余额） -->
+    <select id="getNewCourseLiabilityByStartDate" resultType="java.math.BigDecimal">
+        select coalesce(sum(deferred_amount - recognized_amount), 0)
+        from deferred_revenue
+        where biz_type = 'COURSE'
+          and status = 1
+          and start_date is not null
+          and date_format(start_date, '%Y-%m') = #{yearMonth}
+    </select>
+
+    <!-- 按生效日期和渠道统计本月新增会籍负债（使用未消耗余额） -->
+    <select id="getNewCardLiabilityByStartDateAndChannel" resultType="java.math.BigDecimal">
+        select coalesce(sum(deferred_amount - recognized_amount), 0)
+        from deferred_revenue
+        where biz_type = 'CARD'
+          and status = 1
+          and source_channel = #{sourceChannel}
+          and start_date is not null
+          and date_format(start_date, '%Y-%m') = #{yearMonth}
+    </select>
+
+    <!-- 退课：减少递延金额 -->
+    <update id="reduceDeferredAmount">
+        UPDATE deferred_revenue
+        SET deferred_amount = deferred_amount - #{refundAmount},
+            status = CASE
+                WHEN (deferred_amount - #{refundAmount}) &lt;= recognized_amount THEN 2
+                ELSE status
+            END
+        WHERE id = #{id}
+          AND status = 1
+          AND (deferred_amount - #{refundAmount}) &gt;= recognized_amount
+    </update>
+
+</mapper>

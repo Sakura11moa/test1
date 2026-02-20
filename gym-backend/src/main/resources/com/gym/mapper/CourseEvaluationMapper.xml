@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.CourseEvaluationMapper">
+
+    <resultMap id="CourseEvaluationResultMap" type="com.gym.entity.CourseEvaluation">
+        <id column="eval_no" property="evalNo" jdbcType="BIGINT"/>
+        <result column="booking_no" property="bookingNo" jdbcType="INTEGER"/>
+        <result column="member_no" property="memberNo" jdbcType="INTEGER"/>
+        <result column="course_no" property="courseNo" jdbcType="INTEGER"/>
+        <result column="score" property="score" jdbcType="INTEGER"/>
+        <result column="content" property="content" jdbcType="VARCHAR"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="evalNo">
+        INSERT INTO course_evaluation (booking_no, member_no, course_no, score, content)
+        VALUES (#{bookingNo}, #{memberNo}, #{courseNo}, #{score}, #{content})
+    </insert>
+
+    <select id="getByBookingNo" resultMap="CourseEvaluationResultMap">
+        SELECT * FROM course_evaluation WHERE booking_no = #{bookingNo}
+    </select>
+
+    <select id="listByCourseNo" resultMap="CourseEvaluationResultMap">
+        SELECT * FROM course_evaluation 
+        WHERE course_no = #{courseNo} 
+        ORDER BY create_time DESC
+    </select>
+
+</mapper>

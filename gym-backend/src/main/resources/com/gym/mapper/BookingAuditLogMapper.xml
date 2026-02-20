@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.gym.mapper.BookingAuditLogMapper">
+
+    <resultMap id="BookingAuditLogResultMap" type="com.gym.entity.BookingAuditLog">
+        <id column="id" property="id" jdbcType="BIGINT"/>
+        <result column="booking_no" property="bookingNo" jdbcType="INTEGER"/>
+        <result column="old_status" property="oldStatus" jdbcType="VARCHAR"/>
+        <result column="new_status" property="newStatus" jdbcType="VARCHAR"/>
+        <result column="operator_type" property="operatorType" jdbcType="VARCHAR"/>
+        <result column="operator_id" property="operatorId" jdbcType="INTEGER"/>
+        <result column="action" property="action" jdbcType="VARCHAR"/>
+        <result column="remark" property="remark" jdbcType="VARCHAR"/>
+        <result column="create_time" property="createTime" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO booking_audit_log (booking_no, old_status, new_status, operator_type, operator_id, action, remark)
+        VALUES (#{bookingNo}, #{oldStatus}, #{newStatus}, #{operatorType}, #{operatorId}, #{action}, #{remark})
+    </insert>
+
+    <select id="listByBookingNo" resultMap="BookingAuditLogResultMap">
+        SELECT * FROM booking_audit_log WHERE booking_no = #{bookingNo} ORDER BY create_time DESC
+    </select>
+
+</mapper>
